@@ -1,0 +1,124 @@
+from __future__ import annotations
+
+import logging
+from collections.abc import Sequence
+
+import openai
+from openai import AsyncOpenAI
+from tenacity import (
+    AsyncRetrying,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
+
+from app.core.config import Settings
+from app.core.exceptions import AIProviderError
+
+logger = logging.getLogger(__name__)
+
+_RETRYABLE_ERRORS = (
+    openai.APIConnectionError,
+    openai.APITimeoutError,
+    openai.RateLimitError,
+    openai.InternalServerError,
+)
+
+
+class OpenAIEmbeddingProvider:
+    def __init__(self, settings: Settings) -> None:
+        self.settings = settings
+        self._client: AsyncOpenAI | None = None
+
+    def _get_client(self) -> AsyncOpenAI:
+        if self._client is None:
+            self._client = AsyncOpenAI(
+                api_key=self.settings.openai_key,
+                base_url=self.settings.openai_base_url,
+                timeout=self.settings.openai_timeout_seconds,
+                max_retries=0,
+            )
+        return self._client
+
+    async def embed(self, texts: Sequence[str]) -> list[list[float]]:
+        if not texts:
+            return []
+        request_kwargs: dict[str, object] = {
+            "model": self.settings.openai_embedding_model,
+            "input": list(texts),
+        }
+        if self.settings.openai_embedding_model.startswith("text-embedding-3"):
+            request_kwargs["dimensions"] = self.settings.embedding_dimensions
+        try:
+            async for attempt in AsyncRetrying(
+                stop=stop_after_attempt(3),
+                wait=wait_exponential(multiplier=1, min=1, max=10),
+                retry=retry_if_exception_type(_RETRYABLE_ERRORS),
+                reraise=True,
+            ):
+                with attempt:
+                    response = await self._get_client().embeddings.create(**request_kwargs)
+                    ordered = sorted(response.data, key=lambda item: item.index)
+                    return [list(item.embedding) for item in ordered]
+        except _RETRYABLE_ERRORS as exc:
+            logger.warning("OpenAI embedding request failed after retries: %s", type(exc).__name__)
+            raise AIProviderError("The embedding service is temporarily unavailable") from exc
+        except openai.OpenAIError as exc:
+            logger.error("OpenAI embedding request rejected: %s", type(exc).__name__)
+            raise AIProviderError("The embedding service could not process this request") from exc
+        return []
+
+
+class OpenAIChatProvider:
+    def __init__(self, settings: Settings) -> None:
+        self.settings = settings
+        self._client: AsyncOpenAI | None = None
+
+    def _get_client(self) -> AsyncOpenAI:
+        if self._client is None:
+            self._client = AsyncOpenAI(
+                api_key=self.settings.openai_key,
+                base_url=self.settings.openai_base_url,
+                timeout=self.settings.openai_timeout_seconds,
+                max_retries=0,
+            )
+        return self._client
+
+    async def generate(
+        self,
+        *,
+        system_prompt: str,
+        user_prompt: str,
+        max_tokens: int,
+        temperature: float = 0.0,
+    ) -> str:
+        try:
+            async for attempt in AsyncRetrying(
+                stop=stop_after_attempt(3),
+                wait=wait_exponential(multiplier=1, min=1, max=10),
+                retry=retry_if_exception_type(_RETRYABLE_ERRORS),
+                reraise=True,
+            ):
+                with attempt:
+                    response = await self._get_client().chat.completions.create(
+                        model=self.settings.openai_chat_model,
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt},
+                        ],
+                        max_tokens=max_tokens,
+                        temperature=temperature,
+                    )
+                    content = response.choices[0].message.content if response.choices else None
+                    if not content or not content.strip():
+                        raise AIProviderError("The AI model returned an empty response")
+                    return content.strip()
+        except AIProviderError:
+            raise
+        except _RETRYABLE_ERRORS as exc:
+            logger.warning("OpenAI chat request failed after retries: %s", type(exc).__name__)
+            raise AIProviderError("The AI service is temporarily unavailable") from exc
+        except openai.OpenAIError as exc:
+            logger.error("OpenAI chat request rejected: %s", type(exc).__name__)
+            raise AIProviderError("The AI service could not process this request") from exc
+        raise AIProviderError("The AI service did not return a response")
