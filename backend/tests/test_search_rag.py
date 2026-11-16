@@ -5,7 +5,10 @@ import uuid
 from httpx import AsyncClient
 
 from app.ai.prompts import RAG_SYSTEM_PROMPT
-from app.services.rag import INSUFFICIENT_CONTEXT_ANSWER
+from app.db.session import AsyncSessionLocal
+from app.models.chunk import DocumentChunk
+from app.repositories.chunks import SearchHit
+from app.services.rag import INSUFFICIENT_CONTEXT_ANSWER, resolve_citations
 from tests.fakes import DEFAULT_PAGES, register_user, upload_pdf
 
 SECOND_PAGES = [
@@ -13,6 +16,69 @@ SECOND_PAGES = [
     "delivery and the marketing team owns the announcement.",
     "Project Atlas risks. The primary risk is vendor delay. Mitigation is a backup vendor.",
 ]
+
+
+def _search_hit(index: int, *, filename: str = "agreement.pdf") -> SearchHit:
+    document_id = uuid.uuid4()
+    chunk = DocumentChunk(
+        id=uuid.uuid4(),
+        document_id=document_id,
+        user_id=uuid.uuid4(),
+        content=f"Payment term source {index}",
+        page_number=index,
+        chunk_index=index - 1,
+        embedding=[0.0, 1.0],
+    )
+    return SearchHit(chunk=chunk, document_name=filename, similarity=0.9)
+
+
+def test_citations_only_include_source_labels_used_by_the_model() -> None:
+    hits = [_search_hit(1), _search_hit(2)]
+
+    answer, citations = resolve_citations("Payment is due in 30 days [S2].", hits)
+
+    assert answer == "Payment is due in 30 days [S2]."
+    assert [citation["chunk_id"] for citation in citations] == [str(hits[1].chunk.id)]
+    assert citations[0]["page_number"] == 2
+    assert citations[0]["document_id"] == str(hits[1].chunk.document_id)
+
+
+def test_fabricated_and_out_of_range_citations_are_rejected() -> None:
+    hits = [_search_hit(1), _search_hit(2)]
+
+    answer, citations = resolve_citations("Payment [S1, S99] and renewal [S0].", hits)
+
+    assert answer == "Payment [S1] and renewal."
+    assert [citation["chunk_id"] for citation in citations] == [str(hits[0].chunk.id)]
+
+    clean_answer, no_citations = resolve_citations("Payment [S42].", hits)
+    assert clean_answer == "Payment."
+    assert no_citations == []
+
+
+def test_citation_markers_are_deduplicated_and_ordered() -> None:
+    hits = [_search_hit(1), _search_hit(2), _search_hit(3)]
+
+    answer, citations = resolve_citations("Renewal [S3] and payment [S1] and more [S3, S2].", hits)
+
+    assert answer == "Renewal [S3] and payment [S1] and more [S3, S2]."
+    assert [citation["chunk_id"] for citation in citations] == [
+        str(hits[2].chunk.id),
+        str(hits[0].chunk.id),
+        str(hits[1].chunk.id),
+    ]
+
+
+def test_non_citation_brackets_and_answers_without_markers_are_preserved() -> None:
+    hits = [_search_hit(1)]
+
+    answer, citations = resolve_citations("The value [2024] is final.", hits)
+    assert answer == "The value [2024] is final."
+    assert citations == []
+
+    no_markers, no_citations = resolve_citations("Payment is due.", hits)
+    assert no_markers == "Payment is due."
+    assert no_citations == []
 
 
 async def test_semantic_search_returns_owned_results(client_factory, processed_document) -> None:
@@ -124,6 +190,33 @@ async def test_chat_uses_retrieved_documents_and_persists_citations(
     assert messages[0]["content"] == "What are the payment terms?"
     assert messages[1]["content"] == body["answer"]
     assert messages[1]["citations"][0]["chunk_id"] == citation["chunk_id"]
+
+
+async def test_chat_persists_only_verified_citations(
+    client: AsyncClient, processed_document, chat_provider
+) -> None:
+    await register_user(client)
+    document = await processed_document(client)
+    chat_provider.response = "Payment is due in 30 days [S1, S99]. Renewal is annual [S42]."
+
+    response = await client.post(
+        "/api/v1/chat",
+        json={"question": "What are the payment terms?"},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["answer"] == "Payment is due in 30 days [S1]. Renewal is annual."
+    assert len(body["citations"]) == 1
+
+    async with AsyncSessionLocal() as session:
+        chunk = await session.get(DocumentChunk, uuid.UUID(body["citations"][0]["chunk_id"]))
+    assert chunk is not None
+    assert str(chunk.document_id) == document["id"]
+
+    conversation = await client.get(f"/api/v1/conversations/{body['conversation_id']}")
+    messages = conversation.json()["messages"]
+    assert messages[-1]["content"] == body["answer"]
+    assert messages[-1]["citations"] == body["citations"]
 
 
 async def test_chat_without_processed_context_skips_model(

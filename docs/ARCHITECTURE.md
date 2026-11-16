@@ -144,7 +144,7 @@ The worker:
 1. Atomically claims documents in `uploaded`, `pending`, or `failed` state.
 2. Transitions the row to `processing`.
 3. Reads the stored PDF.
-4. Extracts selectable text with page numbers using pypdf.
+4. Extracts selectable text with page numbers using pypdf and OCRs pages without selectable text when OCR is enabled.
 5. Normalizes text and builds sentence-aware overlapping chunks.
 6. Embeds chunks in configured batches.
 7. Replaces all chunks for the document in the current transaction.
@@ -154,13 +154,14 @@ If a task is delivered twice, the status claim prevents a second worker from rep
 
 ### Failure handling
 
-- Unreadable, encrypted, empty, or textless PDFs fail permanently with a user-facing error.
+- Unreadable, encrypted, or empty PDFs fail permanently with a user-facing error.
+- Pages without selectable text are OCR'd when OCR is enabled; PDFs with no usable text after OCR still fail with a user-facing error.
 - Temporary OpenAI, storage, or unexpected failures are retried up to three times with bounded exponential delays.
 - Before a retry, the document is returned to `pending` so the next attempt can claim it.
 - After retries are exhausted, the document is marked `failed`.
 - A queue enqueue failure immediately marks the upload `failed` with a retry-later message.
 
-A worker process that is killed without raising a Python exception can leave a row in `processing`. Recovery currently requires an operator or a future stale-lease reaper; this is listed in known limitations.
+A worker process that is killed without raising a Python exception can leave a row in `processing`. A periodic Celery Beat task finds rows stale beyond `PROCESSING_STUCK_AFTER_SECONDS` and re-enqueues them. If Beat is not running, operator recovery is still required.
 
 ## Search
 
@@ -254,10 +255,8 @@ The storage protocol isolates upload persistence so an S3-compatible backend can
 ## Extension points
 
 - Add an S3 storage implementation for multi-replica deployments.
-- Add OCR before chunking for scanned PDFs.
 - Move summaries to Celery jobs with progress polling.
 - Add SSE or WebSocket streaming for chat responses.
-- Add a stale-processing task lease and recovery worker.
 - Add organization/workspace tenancy above user ownership.
 - Add a cross-encoder reranker before RAG prompt construction.
 - Add per-user quotas and usage accounting.

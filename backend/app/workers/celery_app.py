@@ -29,4 +29,10 @@ celery_app.conf.update(
     task_soft_time_limit=840,
     broker_connection_retry_on_startup=True,
     result_expires=3600,
+    beat_schedule={
+        "recover-stuck-documents": {
+            "task": "documind.recover_stuck_documents",
+            "schedule": settings.processing_recovery_interval_seconds,
+        }
+    },
 )

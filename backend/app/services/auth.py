@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import logging
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 
 import jwt
 from sqlalchemy.exc import IntegrityError
@@ -23,6 +24,25 @@ from app.models.refresh_token import RefreshToken
 from app.models.user import User
 from app.repositories.refresh_tokens import RefreshTokenRepository
 from app.repositories.users import UserRepository
+
+logger = logging.getLogger(__name__)
+
+_REVOKED_FOR_ROTATION = "rotated"
+_REVOKED_FOR_LOGOUT = "logout"
+_REVOKED_FOR_REUSE = "reuse"
+_REVOKED_FOR_PASSWORD_CHANGE = "password_change"
+
+
+def _is_expired(expires_at: datetime) -> bool:
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=UTC)
+    return expires_at <= datetime.now(UTC)
+
+
+def _within_reuse_grace(revoked_at: datetime, grace_seconds: int) -> bool:
+    if revoked_at.tzinfo is None:
+        revoked_at = revoked_at.replace(tzinfo=UTC)
+    return datetime.now(UTC) - revoked_at <= timedelta(seconds=grace_seconds)
 
 
 @dataclass(slots=True)
@@ -46,12 +66,14 @@ class AuthService:
         *,
         user_agent: str | None = None,
         ip_address: str | None = None,
+        family_id: uuid.UUID | None = None,
     ) -> AuthTokens:
         access_token, _ = create_access_token(user.id, self.settings)
         refresh_token, refresh_expires_at = create_refresh_token(user.id, self.settings)
         self.session.add(
             RefreshToken(
                 user_id=user.id,
+                family_id=family_id or uuid.uuid4(),
                 token_hash=hash_token(refresh_token),
                 expires_at=refresh_expires_at,
                 user_agent=(user_agent or "")[:300] or None,
@@ -124,28 +146,83 @@ class AuthService:
         try:
             payload = decode_token(refresh_token, "refresh", self.settings)
             user_id = uuid.UUID(str(payload["sub"]))
+        except jwt.ExpiredSignatureError as exc:
+            raise UnauthorizedError("Your session has expired. Please sign in again.") from exc
         except (jwt.InvalidTokenError, ValueError, KeyError) as exc:
-            raise UnauthorizedError("Session is invalid or has expired") from exc
+            raise UnauthorizedError("Session is invalid. Please sign in again.") from exc
 
-        stored = await self.refresh_tokens.get_active_by_hash(
-            hash_token(refresh_token), for_update=True
-        )
+        stored = await self.refresh_tokens.get_by_hash(hash_token(refresh_token), for_update=True)
         if stored is None:
-            await self.refresh_tokens.revoke_all_for_user(user_id)
-            await self.session.commit()
-            raise UnauthorizedError("Session is invalid or has expired")
+            logger.warning(
+                "Rejected unknown refresh token",
+                extra={"user_id": str(user_id), "reason": "unknown"},
+            )
+            raise UnauthorizedError("Session is invalid. Please sign in again.")
+        if stored.user_id != user_id:
+            logger.warning(
+                "Rejected refresh token with mismatched subject",
+                extra={"user_id": str(user_id), "reason": "subject_mismatch"},
+            )
+            raise UnauthorizedError("Session is invalid. Please sign in again.")
+
+        if stored.revoked_at is not None:
+            if stored.revoked_reason == _REVOKED_FOR_ROTATION:
+                if _within_reuse_grace(
+                    stored.revoked_at, self.settings.refresh_reuse_grace_seconds
+                ):
+                    logger.warning(
+                        "Refresh token was rotated concurrently; rejected the racing request",
+                        extra={"user_id": str(user_id), "reason": "concurrent"},
+                    )
+                    raise UnauthorizedError("This session is being refreshed. Please retry.")
+                await self.refresh_tokens.revoke_family(stored.family_id, reason=_REVOKED_FOR_REUSE)
+                await self.session.commit()
+                logger.warning(
+                    "Refresh token reuse detected; revoked the session family",
+                    extra={"user_id": str(user_id), "reason": "reuse"},
+                )
+                raise UnauthorizedError(
+                    "This session was ended because its refresh token was reused. "
+                    "Please sign in again."
+                )
+            logger.warning(
+                "Rejected revoked refresh token",
+                extra={"user_id": str(user_id), "reason": stored.revoked_reason or "revoked"},
+            )
+            raise UnauthorizedError("This session has been revoked. Please sign in again.")
+
+        if _is_expired(stored.expires_at):
+            logger.info(
+                "Rejected expired refresh token",
+                extra={"user_id": str(user_id), "reason": "expired"},
+            )
+            raise UnauthorizedError("Your session has expired. Please sign in again.")
+
         user = await self.users.get_by_id(user_id)
         if user is None or not user.is_active:
-            raise UnauthorizedError("Session is invalid or has expired")
+            raise UnauthorizedError("Session is invalid. Please sign in again.")
 
-        await self.refresh_tokens.revoke(stored)
-        tokens = await self._issue_tokens(user, user_agent=user_agent, ip_address=ip_address)
+        if not await self.refresh_tokens.revoke_active(stored.id, reason=_REVOKED_FOR_ROTATION):
+            logger.warning(
+                "Refresh token was rotated concurrently; rejected the racing request",
+                extra={"user_id": str(user_id), "reason": "concurrent"},
+            )
+            raise UnauthorizedError("This session is being refreshed. Please retry.")
+
+        tokens = await self._issue_tokens(
+            user,
+            user_agent=user_agent,
+            ip_address=ip_address,
+            family_id=stored.family_id,
+        )
         await self.session.commit()
         return tokens
 
     async def logout(self, refresh_token: str | None) -> None:
         if refresh_token:
-            await self.refresh_tokens.revoke_by_hash(hash_token(refresh_token))
+            await self.refresh_tokens.revoke_by_hash(
+                hash_token(refresh_token), reason=_REVOKED_FOR_LOGOUT
+            )
             await self.session.commit()
 
     async def update_profile(self, user: User, full_name: str) -> User:
@@ -168,7 +245,7 @@ class AuthService:
         if current_password == new_password:
             raise ConflictError("New password must differ from the current password")
         user.password_hash = hash_password(new_password)
-        await self.refresh_tokens.revoke_all_for_user(user.id)
+        await self.refresh_tokens.revoke_all_for_user(user.id, reason=_REVOKED_FOR_PASSWORD_CHANGE)
         tokens = await self._issue_tokens(user, user_agent=user_agent, ip_address=ip_address)
         await self.session.commit()
         return tokens

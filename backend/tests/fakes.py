@@ -8,7 +8,9 @@ import uuid
 from collections.abc import Sequence
 from typing import Any
 
+import pypdfium2 as pdfium
 from httpx import AsyncClient
+from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
 
 from app.services.embeddings import EmbeddingService
@@ -87,6 +89,32 @@ def make_pdf(pages: list[str]) -> bytes:
         for line in textwrap.wrap(text, width=85):
             text_object.textLine(line)
         pdf.drawText(text_object)
+        pdf.showPage()
+    pdf.save()
+    return buffer.getvalue()
+
+
+def make_scanned_pdf(pages: list[str]) -> bytes:
+    """Rasterize text pages so the result contains images and no selectable text."""
+    source = pdfium.PdfDocument(make_pdf(pages))
+    images: list[Any] = []
+    try:
+        for page in source:
+            bitmap = page.render(scale=2)
+            try:
+                images.append(bitmap.to_pil())
+            finally:
+                bitmap.close()
+    finally:
+        source.close()
+
+    buffer = io.BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=(612, 792))
+    for image in images:
+        image_buffer = io.BytesIO()
+        image.save(image_buffer, format="PNG")
+        image_buffer.seek(0)
+        pdf.drawImage(ImageReader(image_buffer), 0, 0, width=612, height=792)
         pdf.showPage()
     pdf.save()
     return buffer.getvalue()

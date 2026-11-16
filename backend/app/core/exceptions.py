@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from typing import Any
 
 
@@ -72,10 +73,17 @@ class AIProviderError(Exception):
 class DocumentProcessingError(Exception):
     """An expected failure while processing a document."""
 
-    def __init__(self, message: str, *, retryable: bool = False) -> None:
+    def __init__(
+        self,
+        message: str,
+        *,
+        retryable: bool = False,
+        attempt_id: uuid.UUID | None = None,
+    ) -> None:
         super().__init__(message)
         self.message = message
         self.retryable = retryable
+        self.attempt_id = attempt_id
 
 
 class ValidationErrorDetail(dict[str, Any]):

@@ -8,7 +8,7 @@ The repository contains a FastAPI backend, a Next.js dashboard, a Celery worker,
 
 Verified in this workspace:
 
-- Backend: **51 tests passed** on Python 3.14 with SQLite and mocked AI providers.
+- Backend: **86 tests passed and 9 integration tests were skipped** on Python 3.14 with SQLite and mocked AI providers.
 - Backend: **90% line coverage** across `app/`.
 - Backend: Ruff lint and formatting checks pass.
 - Frontend: TypeScript, ESLint, and the Next.js production build pass.
@@ -17,8 +17,10 @@ Verified in this workspace:
 Not verified in this workspace:
 
 - The Docker Compose stack was not started because the Docker daemon was unavailable.
-- PostgreSQL/pgvector, Redis, Celery, Alembic, and container health checks were not exercised against running services.
+- PostgreSQL/pgvector, Redis, Celery, Alembic, and container health checks were not exercised against running services; the 9 integration tests requiring them were skipped.
 - No live OpenAI request was made.
+- Playwright browser E2E tests were not executed because the running stack and bundled browser were unavailable.
+- Real Tesseract OCR was not exercised outside the container; OCR unit tests use a fake engine.
 
 See [Testing](#testing) and [Known limitations](#known-limitations) for details.
 
@@ -29,7 +31,7 @@ See [Testing](#testing) and [Known limitations](#known-limitations) for details.
 - Multi-user PDF upload with authentication and ownership isolation.
 - PDF signature, extension, MIME type, size, and path-safety validation.
 - 20 MB upload limit by default; configurable up to 100 MB.
-- Text extraction with page numbers and overlapping chunking.
+- Text extraction with page numbers, OCR fallback for scanned pages, and overlapping chunking.
 - Asynchronous processing through Celery and Redis.
 - Processing status, retry behavior, error reporting, and idempotent task handling.
 - Document filtering, search, sorting, pagination, statistics, deletion, and polling.
@@ -271,6 +273,7 @@ All application settings are documented in `.env.example`. The most important va
 | `CELERY_RESULT_BACKEND` | Redis DB 1 | Celery result backend. |
 | `CORS_ORIGINS` | `http://localhost:3000` | Comma-separated explicit origins. Wildcards are rejected. |
 | `COOKIE_SECURE` | `false` | Must be `true` in production and whenever SameSite is `none`. |
+| `REFRESH_REUSE_GRACE_SECONDS` | `30` | Window in which racing refreshes retry instead of revoking the session family. |
 | `MAX_UPLOAD_SIZE_MB` | `20` | Upload limit. |
 | `CHUNK_SIZE` / `CHUNK_OVERLAP` | `1000` / `200` | Text chunking behavior. |
 | `SEARCH_DEFAULT_TOP_K` | `5` | Default semantic-search result count. |
@@ -385,14 +388,15 @@ python -m ruff format --check app tests alembic
 
 Covered areas include:
 
-- Registration/login, cookie issuance, refresh rotation, reuse detection, logout, profile, and password changes.
+- Registration/login, cookie issuance, refresh rotation, concurrent-refresh grace, reuse detection, logout, profile, and password changes.
 - Upload validation, traversal rejection, size limits, ownership, filtering, pagination, sorting, stats, and deletion.
-- PDF extraction, chunking, embedding, idempotency, failure handling, and document status transitions.
+- PDF extraction, OCR fallback, chunking, embedding, idempotency, failure handling, stuck-document recovery, and document status transitions.
 - Semantic search, similarity thresholds, filters, and cross-user isolation.
 - RAG citations, conversation persistence, history handling, weak-context shortcuts, and prompt-injection boundaries.
 - Summary caching, force regeneration, map-reduce behavior, and long-summary reduction progress.
 - Health checks, error envelopes, request IDs, CORS, rate limiting, and OpenAPI route registration.
 - Configuration validation for CORS wildcards and production security settings.
+- RAG evaluation metrics, including retrieval hit rate and MRR.
 
 Frontend verification:
 
@@ -401,9 +405,10 @@ Set-Location frontend
 npm.cmd run typecheck
 npm.cmd run lint
 npm.cmd run build
+npx.cmd playwright test
 ```
 
-The test suite intentionally uses SQLite for speed and portability. It does not execute the PostgreSQL/pgvector query path or migrations. Run the Compose smoke test below before a production release.
+The test suite intentionally uses SQLite for speed and portability. It does not execute the PostgreSQL/pgvector query path or migrations. Run the Compose smoke test below before a production release. The Playwright command requires the stack to be running and a compatible browser; set `PLAYWRIGHT_CHANNEL=chrome` to use a locally installed Chrome.
 
 ### PostgreSQL smoke test
 
@@ -472,17 +477,17 @@ For internet-facing deployment, also use TLS, a reverse proxy, private database/
 ## Known limitations
 
 - Local filesystem storage is used by default. Horizontal backend scaling requires shared storage or an S3-compatible adapter.
-- The application only accepts PDFs. Scanned PDFs without an embedded text layer are not OCR'd.
+- The application only accepts PDFs. Scanned pages are processed with Tesseract when OCR is enabled and the configured language packs are installed; OCR quality depends on scan quality, and the configured page/time limits still apply.
 - Chat responses are not streamed; the request waits for the full model response.
 - Document summaries are generated synchronously during the HTTP request and can be slow for large documents.
 - There is no email verification, password-reset email flow, account deletion, or storage quota enforcement.
 - Uploaded files are not virus-scanned.
-- A worker process killed without raising a Python exception can leave a document in `processing`; recovery currently requires an operator to reset and re-enqueue it.
+- A worker process killed without raising a Python exception can leave a document in `processing`; a periodic Celery Beat task recovers stale rows, but operator intervention is still required if Beat is not running.
 - Deleting a document removes its file, chunks, and searchability, but citations in historical chat messages are retained as a record and can point to the deleted document.
 - Rate limits are per client IP and depend on correct trusted-proxy configuration when deployed behind a gateway.
 - Refresh-token history has no scheduled retention cleanup.
 - The automated suite uses SQLite; PostgreSQL/pgvector, Redis, Celery, Alembic, and Docker were not executed in this workspace.
-- The frontend has type, lint, and build checks but no browser end-to-end test suite.
+- Playwright browser E2E tests are included but were not executed in this workspace because they require the running Compose stack and an installed browser.
 
 ## Contributing
 

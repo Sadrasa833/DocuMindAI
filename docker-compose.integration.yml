@@ -1,0 +1,61 @@
+services:
+  mock-ai:
+    build:
+      context: ./backend
+      target: development
+    restart: unless-stopped
+    command:
+      [
+        "uvicorn",
+        "--app-dir",
+        "tests/integration",
+        "mock_openai:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8001",
+      ]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8001/health', timeout=3)",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  backend:
+    environment:
+      OPENAI_API_KEY: test-key
+      OPENAI_BASE_URL: http://mock-ai:8001/v1
+      RATE_LIMIT_ENABLED: "false"
+      SEARCH_MIN_SIMILARITY: "0.0"
+      PROCESSING_STUCK_AFTER_SECONDS: "900"
+      PROCESSING_RECOVERY_INTERVAL_SECONDS: "30"
+    depends_on:
+      mock-ai:
+        condition: service_healthy
+
+  celery-worker:
+    environment:
+      OPENAI_API_KEY: test-key
+      OPENAI_BASE_URL: http://mock-ai:8001/v1
+      PROCESSING_STUCK_AFTER_SECONDS: "900"
+      PROCESSING_RECOVERY_INTERVAL_SECONDS: "30"
+    depends_on:
+      mock-ai:
+        condition: service_healthy
+
+  celery-beat:
+    environment:
+      OPENAI_API_KEY: test-key
+      OPENAI_BASE_URL: http://mock-ai:8001/v1
+      PROCESSING_STUCK_AFTER_SECONDS: "900"
+      PROCESSING_RECOVERY_INTERVAL_SECONDS: "30"
+    depends_on:
+      mock-ai:
+        condition: service_healthy

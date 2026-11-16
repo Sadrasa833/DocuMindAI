@@ -1,0 +1,68 @@
+{
+  "name": "documind-rag-smoke-v1",
+  "description": "Small bilingual-friendly RAG smoke set for retrieval, citation, and refusal metrics.",
+  "documents": [
+    {
+      "filename": "msa-agreement.pdf",
+      "pages": [
+        "Acme Services Agreement. Payment terms are net thirty days from the invoice date. Late payments accrue interest at one percent per month. All invoices must reference the purchase order number.",
+        "The agreement renews annually unless either party gives sixty days written notice before the renewal date. Either party may terminate for a material breach after a thirty day written cure period. Confidential information must be protected for five years after termination."
+      ]
+    },
+    {
+      "filename": "security-policy.pdf",
+      "pages": [
+        "Information Security Policy. Production access requires multi-factor authentication. Encryption at rest uses AES-256. Backups are retained for thirty-five days and are tested monthly.",
+        "Security incidents must be reported to the security team within seventy-two hours. Access reviews occur quarterly. Suspected data loss must be escalated immediately."
+      ]
+    }
+  ],
+  "questions": [
+    {
+      "id": "payment-terms",
+      "question": "What are the payment terms and what interest applies to late payments?",
+      "expected_document": "msa-agreement.pdf",
+      "expected_page": 1,
+      "answer_keywords": [
+        ["thirty days", "net thirty"],
+        ["one percent", "1 percent", "interest"]
+      ]
+    },
+    {
+      "id": "renewal-notice",
+      "question": "When does the agreement renew and how much notice is required?",
+      "expected_document": "msa-agreement.pdf",
+      "expected_page": 2,
+      "answer_keywords": [
+        ["annually", "annual", "year"],
+        ["sixty days", "60 days"]
+      ]
+    },
+    {
+      "id": "incident-reporting",
+      "question": "How quickly must a security incident be reported?",
+      "expected_document": "security-policy.pdf",
+      "expected_page": 2,
+      "answer_keywords": [
+        ["seventy-two hours", "72 hours"]
+      ]
+    },
+    {
+      "id": "backup-retention",
+      "question": "How long are backups retained?",
+      "expected_document": "security-policy.pdf",
+      "expected_page": 1,
+      "answer_keywords": [
+        ["thirty-five days", "35 days"]
+      ]
+    },
+    {
+      "id": "unanswerable-ticker",
+      "question": "What is the company stock ticker symbol?",
+      "expected_document": null,
+      "expected_page": null,
+      "answer_keywords": [],
+      "should_refuse": true
+    }
+  ]
+}

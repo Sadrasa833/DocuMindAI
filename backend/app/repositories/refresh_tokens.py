@@ -18,41 +18,50 @@ class RefreshTokenRepository:
         await self.session.flush()
         return token
 
-    async def get_active_by_hash(
+    async def get_by_hash(
         self, token_hash: str, *, for_update: bool = False
     ) -> RefreshToken | None:
-        stmt = select(RefreshToken).where(
-            RefreshToken.token_hash == token_hash,
-            RefreshToken.revoked_at.is_(None),
-        )
+        """Look up a token regardless of expiry or revocation state.
+
+        Callers must distinguish the states so that an expired or revoked token
+        is not treated as proof of compromise for every session of the user.
+        """
+        stmt = select(RefreshToken).where(RefreshToken.token_hash == token_hash)
         if for_update:
             stmt = stmt.with_for_update()
         result = await self.session.execute(stmt)
-        token = result.scalar_one_or_none()
-        if token is None:
-            return None
-        now = datetime.now(UTC)
-        expires_at = token.expires_at
-        if expires_at.tzinfo is None:
-            expires_at = expires_at.replace(tzinfo=UTC)
-        if expires_at <= now:
-            return None
-        return token
+        return result.scalar_one_or_none()
 
-    async def revoke(self, token: RefreshToken) -> None:
-        token.revoked_at = datetime.now(UTC)
-        self.session.add(token)
+    async def revoke_active(self, token_id: uuid.UUID, *, reason: str) -> bool:
+        """Revoke one token only if it is still active.
 
-    async def revoke_by_hash(self, token_hash: str) -> None:
+        The conditional update is the rotation primitive: concurrent refresh
+        requests for the same token can only have a single winner.
+        """
+        result = await self.session.execute(
+            update(RefreshToken)
+            .where(RefreshToken.id == token_id, RefreshToken.revoked_at.is_(None))
+            .values(revoked_at=datetime.now(UTC), revoked_reason=reason)
+        )
+        return bool(result.rowcount)
+
+    async def revoke_by_hash(self, token_hash: str, *, reason: str) -> None:
         await self.session.execute(
             update(RefreshToken)
             .where(RefreshToken.token_hash == token_hash, RefreshToken.revoked_at.is_(None))
-            .values(revoked_at=datetime.now(UTC))
+            .values(revoked_at=datetime.now(UTC), revoked_reason=reason)
         )
 
-    async def revoke_all_for_user(self, user_id: uuid.UUID) -> None:
+    async def revoke_family(self, family_id: uuid.UUID, *, reason: str) -> None:
+        await self.session.execute(
+            update(RefreshToken)
+            .where(RefreshToken.family_id == family_id, RefreshToken.revoked_at.is_(None))
+            .values(revoked_at=datetime.now(UTC), revoked_reason=reason)
+        )
+
+    async def revoke_all_for_user(self, user_id: uuid.UUID, *, reason: str) -> None:
         await self.session.execute(
             update(RefreshToken)
             .where(RefreshToken.user_id == user_id, RefreshToken.revoked_at.is_(None))
-            .values(revoked_at=datetime.now(UTC))
+            .values(revoked_at=datetime.now(UTC), revoked_reason=reason)
         )

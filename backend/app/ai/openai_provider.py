@@ -40,6 +40,11 @@ class OpenAIEmbeddingProvider:
             )
         return self._client
 
+    async def aclose(self) -> None:
+        if self._client is not None:
+            await self._client.close()
+            self._client = None
+
     async def embed(self, texts: Sequence[str]) -> list[list[float]]:
         if not texts:
             return []
@@ -83,6 +88,11 @@ class OpenAIChatProvider:
                 max_retries=0,
             )
         return self._client
+
+    async def aclose(self) -> None:
+        if self._client is not None:
+            await self._client.close()
+            self._client = None
 
     async def generate(
         self,

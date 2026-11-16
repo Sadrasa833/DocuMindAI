@@ -37,3 +37,21 @@ def test_production_requires_secure_cookies() -> None:
 def test_production_rejects_debug_mode() -> None:
     with pytest.raises(ValidationError, match="DEBUG must be false"):
         make_settings(environment="production", cookie_secure=True, debug=True)
+
+
+def test_ocr_defaults_target_english_and_persian() -> None:
+    settings = make_settings()
+    assert settings.ocr_enabled is True
+    assert settings.ocr_languages == "eng+fas"
+    assert settings.ocr_dpi == 200
+    assert settings.ocr_max_pages == 50
+
+
+def test_ocr_language_codes_are_validated() -> None:
+    with pytest.raises(ValidationError, match="Tesseract language codes"):
+        make_settings(ocr_languages="eng; rm -rf /")
+
+
+def test_ocr_page_limit_must_be_positive() -> None:
+    with pytest.raises(ValidationError):
+        make_settings(ocr_max_pages=0)

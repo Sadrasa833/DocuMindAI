@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, SecretStr, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
@@ -34,6 +35,7 @@ class Settings(BaseSettings):
     jwt_issuer: str = "documind-ai"
     access_token_expire_minutes: int = Field(default=30, ge=5, le=1440)
     refresh_token_expire_days: int = Field(default=7, ge=1, le=90)
+    refresh_reuse_grace_seconds: int = Field(default=30, ge=0, le=300)
     access_cookie_name: str = "documind_access"
     refresh_cookie_name: str = "documind_refresh"
     cookie_secure: bool = False
@@ -59,8 +61,15 @@ class Settings(BaseSettings):
 
     max_upload_size_mb: int = Field(default=20, ge=1, le=100)
     storage_path: str = "data/uploads"
+    processing_stuck_after_seconds: int = Field(default=1800, ge=900)
+    processing_recovery_interval_seconds: int = Field(default=300, ge=30)
     chunk_size: int = Field(default=1000, ge=100, le=8000)
     chunk_overlap: int = Field(default=200, ge=0, le=2000)
+    ocr_enabled: bool = True
+    ocr_languages: str = "eng+fas"
+    ocr_dpi: int = Field(default=200, ge=100, le=400)
+    ocr_max_pages: int = Field(default=50, ge=1, le=500)
+    ocr_timeout_seconds: int = Field(default=30, ge=5, le=300)
     search_default_top_k: int = Field(default=5, ge=1, le=20)
     search_min_similarity: float = Field(default=0.2, ge=0.0, le=0.95)
     rag_max_context_chunks: int = Field(default=8, ge=1, le=20)
@@ -92,6 +101,14 @@ class Settings(BaseSettings):
     @property
     def openai_key(self) -> str:
         return self.openai_api_key.get_secret_value()
+
+    @field_validator("ocr_languages")
+    @classmethod
+    def validate_ocr_languages(cls, value: str) -> str:
+        normalized = value.strip()
+        if not re.fullmatch(r"[A-Za-z0-9_+-]+", normalized):
+            raise ValueError("OCR_LANGUAGES must contain Tesseract language codes separated by '+'")
+        return normalized
 
     @model_validator(mode="before")
     @classmethod

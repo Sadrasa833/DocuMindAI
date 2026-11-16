@@ -19,12 +19,20 @@ x-backend-environment: &backend-environment
   CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
   ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
   REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS:-7}
+  REFRESH_REUSE_GRACE_SECONDS: ${REFRESH_REUSE_GRACE_SECONDS:-30}
   COOKIE_SECURE: ${COOKIE_SECURE:-false}
   COOKIE_SAMESITE: ${COOKIE_SAMESITE:-lax}
   MAX_UPLOAD_SIZE_MB: ${MAX_UPLOAD_SIZE_MB:-20}
   STORAGE_PATH: /data/uploads
+  PROCESSING_STUCK_AFTER_SECONDS: ${PROCESSING_STUCK_AFTER_SECONDS:-1800}
+  PROCESSING_RECOVERY_INTERVAL_SECONDS: ${PROCESSING_RECOVERY_INTERVAL_SECONDS:-300}
   CHUNK_SIZE: ${CHUNK_SIZE:-1000}
   CHUNK_OVERLAP: ${CHUNK_OVERLAP:-200}
+  OCR_ENABLED: ${OCR_ENABLED:-true}
+  OCR_LANGUAGES: ${OCR_LANGUAGES:-eng+fas}
+  OCR_DPI: ${OCR_DPI:-200}
+  OCR_MAX_PAGES: ${OCR_MAX_PAGES:-50}
+  OCR_TIMEOUT_SECONDS: ${OCR_TIMEOUT_SECONDS:-30}
   SEARCH_DEFAULT_TOP_K: ${SEARCH_DEFAULT_TOP_K:-5}
   SEARCH_MIN_SIMILARITY: ${SEARCH_MIN_SIMILARITY:-0.2}
   RAG_MAX_CONTEXT_CHUNKS: ${RAG_MAX_CONTEXT_CHUNKS:-8}
@@ -156,6 +164,37 @@ services:
       timeout: 10s
       retries: 5
       start_period: 30s
+
+  celery-beat:
+    build:
+      context: ./backend
+      target: development
+    restart: unless-stopped
+    init: true
+    env_file:
+      - .env
+    environment:
+      <<: *backend-environment
+      RUN_MIGRATIONS: "false"
+    command:
+      [
+        "celery",
+        "-A",
+        "app.workers.celery_app:celery_app",
+        "beat",
+        "--loglevel=INFO",
+        "--schedule=/tmp/celerybeat-schedule",
+      ]
+    volumes:
+      - ./backend:/app
+      - uploads_data:/data/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
 
   frontend:
     build:

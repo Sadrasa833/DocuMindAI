@@ -161,7 +161,7 @@ cat documind.dump | docker compose exec -T postgres pg_restore -U documind -d do
 
 Back up uploads separately. Database and file backups should correspond; a document row without its file cannot be reprocessed. A file without its row is orphaned and should be cleaned up separately.
 
-Redis contains broker messages, rate-limit counters, and transient task state. It does not replace a PostgreSQL backup. Celery tasks that were interrupted may need operator recovery.
+Redis contains broker messages, rate-limit counters, and transient task state. It does not replace a PostgreSQL backup. A periodic Celery Beat task requeues stale `processing` rows, but interrupted tasks may still need operator review.
 
 ## Health and monitoring
 
@@ -268,8 +268,8 @@ Rollback application images only after checking schema compatibility. Do not ass
 |---|---|---|
 | Upload returns 503 or document becomes `failed` with queue message | Redis or Celery unavailable | Check Redis, `celery-worker` logs, broker URL, and worker health. |
 | Document remains `pending` | Worker not running or broker unreachable | Start/inspect the worker and Celery queue. |
-| Document remains `processing` indefinitely | Worker crashed during processing | Inspect worker logs. Reset the row to `pending` and enqueue again through an operational script or database update after confirming no worker is active. |
-| Document fails with "scanned documents require OCR" | PDF has no selectable text | Supply a text PDF or add an OCR stage. |
+| Document remains `processing` indefinitely | Worker crashed during processing or Celery Beat is not running | Inspect worker and Beat logs; the recovery task requeues stale rows automatically. If Beat is disabled, reset the row to `pending` and enqueue again after confirming no worker is active. |
+| Document fails with an OCR message | OCR is disabled, Tesseract or a language pack is missing, or page/time limits were exceeded | Check `OCR_ENABLED`, `OCR_LANGUAGES`, `OCR_MAX_PAGES`, `OCR_TIMEOUT_SECONDS`, and the worker image's Tesseract packages. |
 | Search returns no results | No completed chunks, weak query, or similarity below `SEARCH_MIN_SIMILARITY` | Check document status, lower the threshold cautiously, or query more specific terms. |
 | Chat says there is insufficient context | Retrieval returned no chunks above the threshold | Verify chunks exist, selected document IDs are completed, and embeddings match the query model. |
 | 502 from `/api/proxy/*` | Frontend cannot reach `BACKEND_URL` | Check DNS/service name, network, backend health, and container logs. |

@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import delete, literal, select
+from sqlalchemy import Float, delete, literal, select, type_coerce
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -84,7 +84,11 @@ class ChunkRepository:
                 literal(query_embedding, type_=Vector(get_settings().embedding_dimensions))
             )
             statement = (
-                select(DocumentChunk, Document.original_filename, distance.label("distance"))
+                select(
+                    DocumentChunk,
+                    Document.original_filename,
+                    type_coerce(distance, Float).label("distance"),
+                )
                 .join(Document, Document.id == DocumentChunk.document_id)
                 .where(*filters)
                 .order_by(distance)

@@ -42,6 +42,12 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         },
     )
     yield
+    from app.api.deps import get_chat_provider, get_embedding_provider
+
+    for provider in (get_embedding_provider(), get_chat_provider()):
+        close = getattr(provider, "aclose", None)
+        if close is not None:
+            await close()
     await engine.dispose()
     logger.info("Application stopped")
 

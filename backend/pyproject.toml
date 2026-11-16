@@ -26,6 +26,7 @@ pythonpath = ["."]
 addopts = "-q --strict-markers"
 markers = [
     "postgres: integration tests that require a PostgreSQL/pgvector test database",
+    "docker: integration tests that require a running Docker Compose stack",
 ]
 filterwarnings = [
     "ignore::DeprecationWarning:passlib.*",

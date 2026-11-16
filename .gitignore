@@ -27,8 +27,14 @@ frontend/.next/
 frontend/out/
 frontend/next-env.d.ts
 frontend/*.tsbuildinfo
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
 npm-debug.log*
 frontend/.env.local
+
+# Celery
+backend/celerybeat-schedule
 
 # Tooling and OS
 .DS_Store
