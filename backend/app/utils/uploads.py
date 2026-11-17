@@ -10,6 +10,7 @@ from pathlib import Path
 
 import anyio
 from fastapi import UploadFile
+from pypdf import PdfReader
 
 from app.core.exceptions import BadRequestError, PayloadTooLargeError, UnsupportedMediaTypeError
 
@@ -80,8 +81,16 @@ async def validate_and_spool_upload(file: UploadFile, max_bytes: int) -> Validat
 
         if size == 0:
             raise BadRequestError("The uploaded PDF is empty")
-        if b"%PDF-" not in header:
+        if not header.lstrip().startswith(b"%PDF-"):
             raise UnsupportedMediaTypeError("The uploaded file is not a valid PDF document")
+        try:
+            reader = PdfReader(str(temporary_path))
+            if not reader.pages:
+                raise ValueError("PDF has no pages")
+        except Exception as exc:
+            raise UnsupportedMediaTypeError(
+                "The uploaded file is not a valid PDF document"
+            ) from exc
 
         return ValidatedUpload(
             filename=filename,

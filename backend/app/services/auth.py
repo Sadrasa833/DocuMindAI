@@ -10,7 +10,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
-from app.core.exceptions import ConflictError, UnauthorizedError
+from app.core.exceptions import (
+    ConflictError,
+    EmailVerificationRequiredError,
+    UnauthorizedError,
+)
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -128,6 +132,10 @@ class AuthService:
             raise UnauthorizedError("Invalid email or password")
         if not user.is_active:
             raise UnauthorizedError("Invalid email or password")
+        if self.settings.email_verification_required and user.email_verified_at is None:
+            raise EmailVerificationRequiredError(
+                "Please verify your email address before signing in"
+            )
         if password_needs_rehash(user.password_hash):
             user.password_hash = hash_password(password)
         tokens = await self._issue_tokens(user, user_agent=user_agent, ip_address=ip_address)

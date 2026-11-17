@@ -47,6 +47,26 @@ class PayloadTooLargeError(AppError):
     code = "payload_too_large"
 
 
+class StorageQuotaExceededError(AppError):
+    status_code = 413
+    code = "storage_quota_exceeded"
+
+
+class MalwareDetectedError(AppError):
+    status_code = 400
+    code = "malware_detected"
+
+
+class MalwareScannerUnavailableError(AppError):
+    status_code = 503
+    code = "malware_scanner_unavailable"
+
+
+class EmailVerificationRequiredError(AppError):
+    status_code = 403
+    code = "email_verification_required"
+
+
 class UnsupportedMediaTypeError(AppError):
     status_code = 415
     code = "unsupported_media_type"

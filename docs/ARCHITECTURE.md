@@ -128,16 +128,18 @@ The browser client treats a 401 on a normal API call as an access-token expiry s
 
 ```text
 POST /documents/upload
-   -> validate extension, MIME type, PDF signature, and size
+   -> validate extension, MIME type, PDF signature, parseable PDF, and size
    -> stream to a temporary file while hashing
+   -> lock the user row and enforce the per-user storage quota
+   -> optionally run ClamAV INSTREAM scanning
    -> copy into storage key <user_id>/<document_id>.pdf
    -> insert document row
    -> commit row
    -> enqueue Celery task
-   -> return document with pending/failed queue state
+   -> mark document pending
 ```
 
-The upload is spooled to disk rather than held entirely in memory. The temporary file is removed in all paths. The storage backend resolves keys with traversal checks and writes via a temporary file plus atomic replace.
+The upload is spooled to disk rather than held entirely in memory. The temporary file is removed in all paths. The storage backend resolves keys with traversal checks. Local storage writes via a temporary file plus atomic replace; the S3-compatible backend streams the file through `boto3` using the same key layout and an optional prefix.
 
 The worker:
 
@@ -194,7 +196,10 @@ chat request
    -> filter by minimum similarity
    -> if no hits: return a deterministic insufficient-context answer
    -> otherwise call the chat model with untrusted delimited sources
-   -> persist user and assistant messages plus citations
+   -> validate label existence, then numeric/negation/lexical claim support
+   -> optionally verify claim/source similarity with batched embeddings
+   -> remove unsupported citations; refuse if no supported citation remains
+   -> persist user and assistant messages plus verified citations
    -> return answer, conversation_id, citations
 ```
 
@@ -204,6 +209,11 @@ Prompt design:
 - Retrieved content is explicitly marked as untrusted data and separated from instructions.
 - Every source has a stable label, document name, page, and content.
 - Citations map source labels to chunk IDs, document IDs, document names, and page numbers.
+- Fabricated or out-of-range labels are removed before claim validation.
+- Each cited claim is checked against its cited chunks with number, negation, and token-coverage checks; unrelated citations are removed.
+- When `RAG_CITATION_SEMANTIC_CHECK=true`, claim embeddings add a batched semantic-similarity check. This is off by default to avoid extra API calls.
+- Multiple sources can jointly support a multi-part claim, while citations that do not add evidence are dropped.
+- If no supported citation remains and citations are required, the deterministic insufficient-evidence response is returned.
 - Conversation history is used to resolve references such as "it" or "that section"; history is not treated as evidence.
 - Model temperature is `0.0`.
 - Weak retrieval returns a fixed response without calling the model.
@@ -248,15 +258,17 @@ A single durable database holds relational ownership data and vector search stat
 
 External AI services are nondeterministic, slow, and billed per request. Provider interfaces and deterministic fakes make the suite fast and reliable while exercising all application logic around the providers.
 
-### Local storage abstraction
+### Storage and upload security
 
-The storage protocol isolates upload persistence so an S3-compatible backend can replace local disk without changing document or processing services.
+The storage protocol isolates upload persistence behind local and S3-compatible implementations. Local disk remains the development default; S3 mode supports AWS S3, MinIO, and compatible services, and uses the same `<user_id>/<document_id>.pdf` key layout. Per-user quotas are enforced while holding a row lock on the user, so concurrent uploads cannot both consume the last remaining bytes. Quota checks use the sum of stored document sizes.
+
+PDF uploads are validated by extension, declared MIME type, `%PDF-` signature, and an actual pypdf parse before persistence. Filenames are never used as storage paths. ClamAV scanning is optional and fail-closed: when enabled, an unreachable or malformed scanner response rejects the upload.
 
 ## Extension points
 
-- Add an S3 storage implementation for multi-replica deployments.
+- Add workspace/organization-scoped storage quotas.
 - Move summaries to Celery jobs with progress polling.
 - Add SSE or WebSocket streaming for chat responses.
 - Add organization/workspace tenancy above user ownership.
 - Add a cross-encoder reranker before RAG prompt construction.
-- Add per-user quotas and usage accounting.
+- Add detailed usage accounting and plan-based quota tiers.

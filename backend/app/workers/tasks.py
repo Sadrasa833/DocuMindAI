@@ -9,10 +9,12 @@ from app.core.config import get_settings
 from app.core.exceptions import DocumentProcessingError
 from app.db.session import AsyncSessionLocal
 from app.models.enums import DocumentStatus
+from app.repositories.account_tokens import AccountTokenRepository
 from app.repositories.documents import DocumentRepository
+from app.repositories.refresh_tokens import RefreshTokenRepository
 from app.services.embeddings import EmbeddingService
 from app.services.processing import ProcessingService
-from app.services.storage import LocalStorageBackend
+from app.services.storage import create_storage_backend
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -45,6 +47,19 @@ async def _mark_document_failed(
         await session.commit()
 
 
+async def _cleanup_expired_tokens() -> tuple[int, int]:
+    settings = get_settings()
+    async with AsyncSessionLocal() as session:
+        account_tokens = await AccountTokenRepository(session).delete_stale(
+            retention_days=settings.token_cleanup_retention_days
+        )
+        refresh_tokens = await RefreshTokenRepository(session).delete_stale(
+            retention_days=settings.token_cleanup_retention_days
+        )
+        await session.commit()
+        return account_tokens, refresh_tokens
+
+
 async def _recover_stuck_documents() -> list[uuid.UUID]:
     settings = get_settings()
     async with AsyncSessionLocal() as session:
@@ -64,7 +79,7 @@ async def _process_document(document_id: uuid.UUID) -> None:
             service = ProcessingService(
                 session,
                 settings=settings,
-                storage=LocalStorageBackend(settings),
+                storage=create_storage_backend(settings),
                 embedding_service=EmbeddingService(
                     provider,
                     dimensions=settings.embedding_dimensions,
@@ -138,6 +153,16 @@ def process_document_task(self, document_id: str) -> None:
             )
         except Exception:
             logger.exception("Could not persist document failure status")
+
+
+@celery_app.task(name="documind.cleanup_expired_tokens")
+def cleanup_expired_tokens_task() -> dict[str, int]:
+    account_tokens, refresh_tokens = asyncio.run(_cleanup_expired_tokens())
+    logger.info(
+        "Cleaned up expired authentication tokens",
+        extra={"account_tokens": account_tokens, "refresh_tokens": refresh_tokens},
+    )
+    return {"account_tokens": account_tokens, "refresh_tokens": refresh_tokens}
 
 
 @celery_app.task(name="documind.recover_stuck_documents")

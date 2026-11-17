@@ -19,3 +19,16 @@ class MessageRole(StrEnum):
 class SummaryStyle(StrEnum):
     SHORT = "short"
     DETAILED = "detailed"
+
+
+class SummaryStatus(StrEnum):
+    NONE = "none"
+    PENDING = "pending"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class AccountTokenPurpose(StrEnum):
+    EMAIL_VERIFICATION = "email_verification"
+    PASSWORD_RESET = "password_reset"

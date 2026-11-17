@@ -9,7 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 from app.models.base import TimestampMixin, UUIDPrimaryKeyMixin
-from app.models.enums import DocumentStatus, SummaryStyle
+from app.models.enums import DocumentStatus, SummaryStatus, SummaryStyle
 
 if TYPE_CHECKING:
     from app.models.chunk import DocumentChunk
@@ -58,6 +58,25 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=True,
     )
     summarized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    summary_status: Mapped[SummaryStatus] = mapped_column(
+        Enum(
+            SummaryStatus,
+            name="summary_status",
+            native_enum=False,
+            length=20,
+            values_callable=lambda enum_class: [member.value for member in enum_class],
+        ),
+        default=SummaryStatus.NONE,
+        server_default=SummaryStatus.NONE.value,
+        nullable=False,
+    )
+    summary_error: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    summary_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    summary_attempt_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), nullable=True
+    )
     processing_started_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

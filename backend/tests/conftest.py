@@ -37,6 +37,7 @@ os.environ["OPENAI_EMBEDDING_MODEL"] = "test-embedding-model"
 
 from app.api.deps import (  # noqa: E402
     get_chat_provider,
+    get_email_sender,
     get_embedding_provider,
     get_storage_backend,
     get_task_dispatcher,
@@ -50,6 +51,7 @@ from app.services.processing import ProcessingService  # noqa: E402
 from app.services.storage import LocalStorageBackend  # noqa: E402
 from tests.fakes import (  # noqa: E402
     FakeChatProvider,
+    FakeEmailSender,
     FakeEmbeddingProvider,
     FakeTaskDispatcher,
     make_embedding_service,
@@ -59,6 +61,7 @@ settings = get_settings()
 fake_dispatcher = FakeTaskDispatcher()
 fake_embedding_provider = FakeEmbeddingProvider(settings.embedding_dimensions)
 fake_chat_provider = FakeChatProvider()
+fake_email_sender = FakeEmailSender()
 
 
 def _embedding_provider_override() -> FakeEmbeddingProvider:
@@ -77,10 +80,15 @@ def _storage_override() -> LocalStorageBackend:
     return LocalStorageBackend(settings)
 
 
+def _email_sender_override() -> FakeEmailSender:
+    return fake_email_sender
+
+
 app.dependency_overrides[get_embedding_provider] = _embedding_provider_override
 app.dependency_overrides[get_chat_provider] = _chat_provider_override
 app.dependency_overrides[get_task_dispatcher] = _dispatcher_override
 app.dependency_overrides[get_storage_backend] = _storage_override
+app.dependency_overrides[get_email_sender] = _email_sender_override
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -96,6 +104,7 @@ def reset_fakes() -> AsyncIterator[None]:
     fake_dispatcher.enqueued.clear()
     fake_embedding_provider.calls.clear()
     fake_chat_provider.calls.clear()
+    fake_email_sender.messages.clear()
     fake_chat_provider.response = "The documents state that payment is due within 30 days [S1]."
     shutil.rmtree(TEST_UPLOAD_PATH, ignore_errors=True)
     TEST_UPLOAD_PATH.mkdir(parents=True, exist_ok=True)
@@ -165,6 +174,11 @@ async def processed_document(
 @pytest.fixture
 def chat_provider() -> FakeChatProvider:
     return fake_chat_provider
+
+
+@pytest.fixture
+def email_sender() -> FakeEmailSender:
+    return fake_email_sender
 
 
 @pytest.fixture

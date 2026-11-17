@@ -7,11 +7,13 @@ from fastapi import UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import NotFoundError, StorageQuotaExceededError
 from app.models.document import Document
 from app.models.enums import DocumentStatus
 from app.repositories.documents import DocumentRepository
+from app.repositories.users import UserRepository
 from app.services.dispatch import TaskDispatcher
+from app.services.scanning import MalwareScanner
 from app.services.storage import StorageBackend, StorageError
 from app.utils.uploads import validate_and_spool_upload
 
@@ -26,18 +28,32 @@ class DocumentService:
         settings: Settings,
         storage: StorageBackend,
         dispatcher: TaskDispatcher,
+        malware_scanner: MalwareScanner | None = None,
     ) -> None:
         self.session = session
         self.settings = settings
         self.storage = storage
         self.dispatcher = dispatcher
+        self.malware_scanner = malware_scanner
         self.documents = DocumentRepository(session)
+        self.users = UserRepository(session)
 
     async def upload(self, *, user_id: uuid.UUID, file: UploadFile) -> Document:
         upload = await validate_and_spool_upload(file, self.settings.max_upload_size_bytes)
         document_id = uuid.uuid4()
         storage_key = f"{user_id}/{document_id}.pdf"
         try:
+            await self.users.get_by_id_for_update(user_id)
+            used_bytes = await self.documents.total_file_size(user_id)
+            quota_bytes = self.settings.user_storage_quota_bytes
+            if used_bytes + upload.size > quota_bytes:
+                raise StorageQuotaExceededError(
+                    "Storage quota exceeded. "
+                    f"Used {used_bytes // (1024 * 1024)} MB of "
+                    f"{quota_bytes // (1024 * 1024)} MB."
+                )
+            if self.malware_scanner is not None:
+                await self.malware_scanner.scan(upload.temporary_path)
             await self.storage.save_file(upload.temporary_path, storage_key)
             document = Document(
                 id=document_id,

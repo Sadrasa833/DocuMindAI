@@ -1,0 +1,1003 @@
+{
+  "dataset": "documind-rag-benchmark-v2",
+  "mode": "retrieval",
+  "summary": {
+    "questions": 110,
+    "answerable_questions": 100,
+    "unanswerable_questions": 10,
+    "retrieval_hit_rate": 0.96,
+    "mrr": 0.8039404761904761
+  },
+  "results": [
+    {
+      "id": "northwind-payment-term",
+      "question": "What payment term applies to Northwind invoices?",
+      "expected_document": "northwind-vendor-agreement.pdf",
+      "expected_page": 1,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "northwind-late-fee",
+      "question": "What monthly fee applies to late Northwind balances?",
+      "expected_document": "northwind-vendor-agreement.pdf",
+      "expected_page": 1,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "northwind-initial-term",
+      "question": "What is the initial term of the Northwind agreement?",
+      "expected_document": "northwind-vendor-agreement.pdf",
+      "expected_page": 2,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 2
+    },
+    {
+      "id": "northwind-renewal-notice",
+      "question": "How much notice is required to stop Northwind renewal?",
+      "expected_document": "northwind-vendor-agreement.pdf",
+      "expected_page": 2,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "northwind-termination-convenience",
+      "question": "How much notice is needed to terminate Northwind for convenience?",
+      "expected_document": "northwind-vendor-agreement.pdf",
+      "expected_page": 3,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 2
+    },
+    {
+      "id": "northwind-breach-cure",
+      "question": "What cure period applies to a Northwind material breach?",
+      "expected_document": "northwind-vendor-agreement.pdf",
+      "expected_page": 3,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "northwind-confidentiality-survival",
+      "question": "How long do Northwind confidentiality obligations survive?",
+      "expected_document": "northwind-vendor-agreement.pdf",
+      "expected_page": 4,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "northwind-data-return",
+      "question": "When must Northwind return or destroy confidential data?",
+      "expected_document": "northwind-vendor-agreement.pdf",
+      "expected_page": 4,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "northwind-liability-cap",
+      "question": "What is the Northwind liability cap per claim?",
+      "expected_document": "northwind-vendor-agreement.pdf",
+      "expected_page": 5,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "northwind-governing-law",
+      "question": "Which state's law governs the Northwind agreement?",
+      "expected_document": "northwind-vendor-agreement.pdf",
+      "expected_page": 5,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 2
+    },
+    {
+      "id": "security-mfa",
+      "question": "Which access requires multi-factor authentication?",
+      "expected_document": "information-security-policy.pdf",
+      "expected_page": 1,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "security-lockout",
+      "question": "After how many failed login attempts does an account lock?",
+      "expected_document": "information-security-policy.pdf",
+      "expected_page": 1,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "security-encryption-at-rest",
+      "question": "What encryption algorithm protects data at rest?",
+      "expected_document": "information-security-policy.pdf",
+      "expected_page": 2,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "security-backup-retention",
+      "question": "How long are security backups retained?",
+      "expected_document": "information-security-policy.pdf",
+      "expected_page": 2,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 6
+    },
+    {
+      "id": "security-incident-report",
+      "question": "How quickly must a security incident be reported?",
+      "expected_document": "information-security-policy.pdf",
+      "expected_page": 3,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "security-incident-postmortem",
+      "question": "When is a security incident postmortem due?",
+      "expected_document": "information-security-policy.pdf",
+      "expected_page": 3,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 2
+    },
+    {
+      "id": "security-access-review",
+      "question": "How often are access reviews performed?",
+      "expected_document": "information-security-policy.pdf",
+      "expected_page": 4,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "security-termination-access",
+      "question": "When is access removed for terminated employees?",
+      "expected_document": "information-security-policy.pdf",
+      "expected_page": 4,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "security-log-retention",
+      "question": "How long are security logs retained?",
+      "expected_document": "information-security-policy.pdf",
+      "expected_page": 5,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 2
+    },
+    {
+      "id": "security-critical-patch",
+      "question": "What is the patch deadline for critical vulnerabilities?",
+      "expected_document": "information-security-policy.pdf",
+      "expected_page": 5,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 2
+    },
+    {
+      "id": "handbook-pto",
+      "question": "How many PTO days do full-time employees receive each year?",
+      "expected_document": "employee-handbook.pdf",
+      "expected_page": 1,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "handbook-carryover",
+      "question": "How many unused PTO days may employees carry over?",
+      "expected_document": "employee-handbook.pdf",
+      "expected_page": 1,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "handbook-remote",
+      "question": "How many remote days per week are allowed?",
+      "expected_document": "employee-handbook.pdf",
+      "expected_page": 2,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "handbook-core-hours",
+      "question": "What are the core collaboration hours?",
+      "expected_document": "employee-handbook.pdf",
+      "expected_page": 2,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "handbook-expense-deadline",
+      "question": "When are expense reports due?",
+      "expected_document": "employee-handbook.pdf",
+      "expected_page": 3,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "handbook-receipt-threshold",
+      "question": "When is an itemized receipt required?",
+      "expected_document": "employee-handbook.pdf",
+      "expected_page": 3,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 5
+    },
+    {
+      "id": "handbook-parental",
+      "question": "How much paid parental leave is provided?",
+      "expected_document": "employee-handbook.pdf",
+      "expected_page": 4,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "handbook-sick",
+      "question": "How many paid sick days do employees receive each year?",
+      "expected_document": "employee-handbook.pdf",
+      "expected_page": 4,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 2
+    },
+    {
+      "id": "handbook-harassment-report",
+      "question": "Where can employees report harassment?",
+      "expected_document": "employee-handbook.pdf",
+      "expected_page": 5,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "handbook-harassment-ack",
+      "question": "When does HR acknowledge a harassment report?",
+      "expected_document": "employee-handbook.pdf",
+      "expected_page": 5,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 2
+    },
+    {
+      "id": "retention-customer-retention",
+      "question": "How long are customer records retained after contract end?",
+      "expected_document": "data-retention-policy.pdf",
+      "expected_page": 1,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "retention-deletion-request",
+      "question": "When are customer deletion requests completed?",
+      "expected_document": "data-retention-policy.pdf",
+      "expected_page": 1,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "retention-employee-retention",
+      "question": "How long are employee records retained after departure?",
+      "expected_document": "data-retention-policy.pdf",
+      "expected_page": 2,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "retention-payroll-retention",
+      "question": "How long are payroll records retained?",
+      "expected_document": "data-retention-policy.pdf",
+      "expected_page": 2,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "retention-audit-log",
+      "question": "How long are audit logs retained?",
+      "expected_document": "data-retention-policy.pdf",
+      "expected_page": 3,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "retention-security-log",
+      "question": "How long are security logs retained under the data retention policy?",
+      "expected_document": "data-retention-policy.pdf",
+      "expected_page": 3,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "retention-legal-hold",
+      "question": "What does a legal hold do to deletion activity?",
+      "expected_document": "data-retention-policy.pdf",
+      "expected_page": 4,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "retention-legal-notify",
+      "question": "When must legal be notified of a legal hold?",
+      "expected_document": "data-retention-policy.pdf",
+      "expected_page": 4,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "retention-backup-retention",
+      "question": "How long are data retention backup copies kept?",
+      "expected_document": "data-retention-policy.pdf",
+      "expected_page": 5,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "retention-backup-purge",
+      "question": "When is deleted data purged from backups?",
+      "expected_document": "data-retention-policy.pdf",
+      "expected_page": 5,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "cloud-regions",
+      "question": "Which region is the cloud disaster recovery region?",
+      "expected_document": "cloud-architecture-standard.pdf",
+      "expected_page": 1,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "cloud-rto",
+      "question": "What is the cloud recovery time objective?",
+      "expected_document": "cloud-architecture-standard.pdf",
+      "expected_page": 1,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "cloud-cpu-target",
+      "question": "What CPU utilization does autoscaling target?",
+      "expected_document": "cloud-architecture-standard.pdf",
+      "expected_page": 2,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "cloud-max-instances",
+      "question": "What is the maximum number of instances per service?",
+      "expected_document": "cloud-architecture-standard.pdf",
+      "expected_page": 2,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 6
+    },
+    {
+      "id": "cloud-metrics-interval",
+      "question": "How often does Prometheus collect cloud metrics?",
+      "expected_document": "cloud-architecture-standard.pdf",
+      "expected_page": 3,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "cloud-alert-threshold",
+      "question": "When does the 5xx alert page the on-call engineer?",
+      "expected_document": "cloud-architecture-standard.pdf",
+      "expected_page": 3,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "cloud-deploy-window",
+      "question": "When are production deployments allowed?",
+      "expected_document": "cloud-architecture-standard.pdf",
+      "expected_page": 4,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 7
+    },
+    {
+      "id": "cloud-canary",
+      "question": "What percentage of traffic does the production canary receive?",
+      "expected_document": "cloud-architecture-standard.pdf",
+      "expected_page": 4,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "cloud-read-replica",
+      "question": "Which region hosts the PostgreSQL read replica?",
+      "expected_document": "cloud-architecture-standard.pdf",
+      "expected_page": 5,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "cloud-cdn-ttl",
+      "question": "How long does CloudFront cache content?",
+      "expected_document": "cloud-architecture-standard.pdf",
+      "expected_page": 5,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "support-p1-response",
+      "question": "What is the first response target for a P1 support ticket?",
+      "expected_document": "customer-support-playbook.pdf",
+      "expected_page": 1,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 2
+    },
+    {
+      "id": "support-p3-response",
+      "question": "What is the first response target for a P3 support ticket?",
+      "expected_document": "customer-support-playbook.pdf",
+      "expected_page": 1,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 2
+    },
+    {
+      "id": "support-p1-definition",
+      "question": "What counts as a P1 support incident?",
+      "expected_document": "customer-support-playbook.pdf",
+      "expected_page": 2,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "support-p2-definition",
+      "question": "What counts as a P2 support incident?",
+      "expected_document": "customer-support-playbook.pdf",
+      "expected_page": 2,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "support-first-escalation",
+      "question": "When is a support issue escalated to the support lead?",
+      "expected_document": "customer-support-playbook.pdf",
+      "expected_page": 3,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "support-incident-commander",
+      "question": "When does the incident commander join a support issue?",
+      "expected_document": "customer-support-playbook.pdf",
+      "expected_page": 3,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 2
+    },
+    {
+      "id": "support-refund-window",
+      "question": "How long do customers have to request a refund?",
+      "expected_document": "customer-support-playbook.pdf",
+      "expected_page": 4,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "support-refund-approval",
+      "question": "When is manager approval required for a refund?",
+      "expected_document": "customer-support-playbook.pdf",
+      "expected_page": 4,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "support-status-page",
+      "question": "When is the public status page updated after an outage?",
+      "expected_document": "customer-support-playbook.pdf",
+      "expected_page": 5,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "support-support-postmortem",
+      "question": "When is a customer-outage postmortem published?",
+      "expected_document": "customer-support-playbook.pdf",
+      "expected_page": 5,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "procurement-under-5k",
+      "question": "Who approves a purchase under $5,000?",
+      "expected_document": "procurement-policy.pdf",
+      "expected_page": 1,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 2
+    },
+    {
+      "id": "procurement-over-50k",
+      "question": "Who approves a purchase over $50,000?",
+      "expected_document": "procurement-policy.pdf",
+      "expected_page": 1,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "procurement-quotes-over-25k",
+      "question": "How many written quotes are required above $25,000?",
+      "expected_document": "procurement-policy.pdf",
+      "expected_page": 2,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "procurement-sole-source",
+      "question": "What is required for a sole-source procurement?",
+      "expected_document": "procurement-policy.pdf",
+      "expected_page": 2,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 2
+    },
+    {
+      "id": "procurement-vendor-security-review",
+      "question": "How long does a vendor security review take?",
+      "expected_document": "procurement-policy.pdf",
+      "expected_page": 3,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "procurement-vendor-insurance",
+      "question": "How much liability insurance must vendors carry?",
+      "expected_document": "procurement-policy.pdf",
+      "expected_page": 3,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "procurement-po-threshold",
+      "question": "When is a purchase order required?",
+      "expected_document": "procurement-policy.pdf",
+      "expected_page": 4,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "procurement-payment-terms",
+      "question": "What are the standard vendor payment terms?",
+      "expected_document": "procurement-policy.pdf",
+      "expected_page": 4,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "procurement-gift-limit",
+      "question": "What is the employee gift value limit?",
+      "expected_document": "procurement-policy.pdf",
+      "expected_page": 5,
+      "should_refuse": false,
+      "retrieval_hit": false,
+      "retrieval_rank": null
+    },
+    {
+      "id": "procurement-cash-gifts",
+      "question": "What is the policy on cash gifts?",
+      "expected_document": "procurement-policy.pdf",
+      "expected_page": 5,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "roadmap-release-cadence",
+      "question": "How often are product features released?",
+      "expected_document": "product-roadmap.pdf",
+      "expected_page": 1,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 8
+    },
+    {
+      "id": "roadmap-code-freeze",
+      "question": "When does code freeze begin before a release?",
+      "expected_document": "product-roadmap.pdf",
+      "expected_page": 1,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "roadmap-q1-feature",
+      "question": "What feature is delivered in Q1?",
+      "expected_document": "product-roadmap.pdf",
+      "expected_page": 2,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 3
+    },
+    {
+      "id": "roadmap-q2-feature",
+      "question": "What feature is delivered in Q2?",
+      "expected_document": "product-roadmap.pdf",
+      "expected_page": 2,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 3
+    },
+    {
+      "id": "roadmap-beta-size",
+      "question": "How many customers does the beta program accept?",
+      "expected_document": "product-roadmap.pdf",
+      "expected_page": 3,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "roadmap-beta-duration",
+      "question": "How long is each beta customer evaluation?",
+      "expected_document": "product-roadmap.pdf",
+      "expected_page": 3,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "roadmap-deprecation-notice",
+      "question": "How much notice is required before a feature deprecation?",
+      "expected_document": "product-roadmap.pdf",
+      "expected_page": 4,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 3
+    },
+    {
+      "id": "roadmap-api-sunset",
+      "question": "When does API v1 sunset?",
+      "expected_document": "product-roadmap.pdf",
+      "expected_page": 4,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "roadmap-accessibility",
+      "question": "What accessibility standard is the product target?",
+      "expected_document": "product-roadmap.pdf",
+      "expected_page": 5,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 5
+    },
+    {
+      "id": "roadmap-languages",
+      "question": "Which languages ship in Q3?",
+      "expected_document": "product-roadmap.pdf",
+      "expected_page": 5,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "facilities-office-hours",
+      "question": "What are the office opening hours?",
+      "expected_document": "facilities-guide.pdf",
+      "expected_page": 1,
+      "should_refuse": false,
+      "retrieval_hit": false,
+      "retrieval_rank": null
+    },
+    {
+      "id": "facilities-visitor",
+      "question": "What must office visitors do?",
+      "expected_document": "facilities-guide.pdf",
+      "expected_page": 1,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "facilities-parking-level",
+      "question": "Where is employee parking located?",
+      "expected_document": "facilities-guide.pdf",
+      "expected_page": 2,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "facilities-parking-cost",
+      "question": "How much does employee parking cost?",
+      "expected_document": "facilities-guide.pdf",
+      "expected_page": 2,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "facilities-assembly",
+      "question": "Where is the emergency assembly point?",
+      "expected_document": "facilities-guide.pdf",
+      "expected_page": 3,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "facilities-drill",
+      "question": "How often are fire drills held?",
+      "expected_document": "facilities-guide.pdf",
+      "expected_page": 3,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 4
+    },
+    {
+      "id": "facilities-room-booking",
+      "question": "How far in advance can conference rooms be booked?",
+      "expected_document": "facilities-guide.pdf",
+      "expected_page": 4,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "facilities-room-cancel",
+      "question": "When must a conference room reservation be canceled?",
+      "expected_document": "facilities-guide.pdf",
+      "expected_page": 4,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "facilities-mail-cutoff",
+      "question": "What is the mailroom shipping cutoff?",
+      "expected_document": "facilities-guide.pdf",
+      "expected_page": 5,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "facilities-recycling",
+      "question": "Where are recycling bins located?",
+      "expected_document": "facilities-guide.pdf",
+      "expected_page": 5,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "api-access-token",
+      "question": "When do OAuth access tokens expire?",
+      "expected_document": "api-security-standard.pdf",
+      "expected_page": 1,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "api-refresh-token",
+      "question": "When do OAuth refresh tokens expire?",
+      "expected_document": "api-security-standard.pdf",
+      "expected_page": 1,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "api-rate-limit",
+      "question": "What is the API rate limit per key?",
+      "expected_document": "api-security-standard.pdf",
+      "expected_page": 2,
+      "should_refuse": false,
+      "retrieval_hit": false,
+      "retrieval_rank": null
+    },
+    {
+      "id": "api-retry-after",
+      "question": "What Retry-After value is returned in a 429 response?",
+      "expected_document": "api-security-standard.pdf",
+      "expected_page": 2,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 2
+    },
+    {
+      "id": "api-key-rotation",
+      "question": "How often must API keys be rotated?",
+      "expected_document": "api-security-standard.pdf",
+      "expected_page": 3,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "api-key-compromise",
+      "question": "When must a compromised API key be revoked?",
+      "expected_document": "api-security-standard.pdf",
+      "expected_page": 3,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "api-tls",
+      "question": "What is the minimum TLS version for API connections?",
+      "expected_document": "api-security-standard.pdf",
+      "expected_page": 4,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 7
+    },
+    {
+      "id": "api-payload-size",
+      "question": "What is the maximum API payload size?",
+      "expected_document": "api-security-standard.pdf",
+      "expected_page": 4,
+      "should_refuse": false,
+      "retrieval_hit": false,
+      "retrieval_rank": null
+    },
+    {
+      "id": "api-webhook-signing",
+      "question": "How are API webhooks signed?",
+      "expected_document": "api-security-standard.pdf",
+      "expected_page": 5,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "api-webhook-retry",
+      "question": "How many times are failed webhooks retried?",
+      "expected_document": "api-security-standard.pdf",
+      "expected_page": 5,
+      "should_refuse": false,
+      "retrieval_hit": true,
+      "retrieval_rank": 1
+    },
+    {
+      "id": "unanswerable-ticker",
+      "question": "What is the company stock ticker symbol?",
+      "expected_document": null,
+      "expected_page": null,
+      "should_refuse": true,
+      "retrieval_hit": false,
+      "retrieval_rank": null
+    },
+    {
+      "id": "unanswerable-ceo-color",
+      "question": "What is the CEO's favorite color?",
+      "expected_document": null,
+      "expected_page": null,
+      "should_refuse": true,
+      "retrieval_hit": false,
+      "retrieval_rank": null
+    },
+    {
+      "id": "unanswerable-office-dog",
+      "question": "What is the name of the office dog?",
+      "expected_document": null,
+      "expected_page": null,
+      "should_refuse": true,
+      "retrieval_hit": false,
+      "retrieval_rank": null
+    },
+    {
+      "id": "unanswerable-revenue-2029",
+      "question": "What revenue is projected for 2029?",
+      "expected_document": null,
+      "expected_page": null,
+      "should_refuse": true,
+      "retrieval_hit": false,
+      "retrieval_rank": null
+    },
+    {
+      "id": "unanswerable-mars-office",
+      "question": "What is the address of the Mars office?",
+      "expected_document": null,
+      "expected_page": null,
+      "should_refuse": true,
+      "retrieval_hit": false,
+      "retrieval_rank": null
+    },
+    {
+      "id": "unanswerable-employee-count",
+      "question": "How many employees work at the company?",
+      "expected_document": null,
+      "expected_page": null,
+      "should_refuse": true,
+      "retrieval_hit": false,
+      "retrieval_rank": null
+    },
+    {
+      "id": "unanswerable-secret-codename",
+      "question": "What is the secret project codename?",
+      "expected_document": null,
+      "expected_page": null,
+      "should_refuse": true,
+      "retrieval_hit": false,
+      "retrieval_rank": null
+    },
+    {
+      "id": "unanswerable-cafeteria-menu",
+      "question": "What is on the cafeteria menu today?",
+      "expected_document": null,
+      "expected_page": null,
+      "should_refuse": true,
+      "retrieval_hit": false,
+      "retrieval_rank": null
+    },
+    {
+      "id": "unanswerable-founder-phone",
+      "question": "What is the founder's phone number?",
+      "expected_document": null,
+      "expected_page": null,
+      "should_refuse": true,
+      "retrieval_hit": false,
+      "retrieval_rank": null
+    },
+    {
+      "id": "unanswerable-ceo-home",
+      "question": "What is the CEO's home address?",
+      "expected_document": null,
+      "expected_page": null,
+      "should_refuse": true,
+      "retrieval_hit": false,
+      "retrieval_rank": null
+    }
+  ]
+}

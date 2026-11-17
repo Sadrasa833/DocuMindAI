@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.refresh_token import RefreshToken
@@ -65,3 +65,17 @@ class RefreshTokenRepository:
             .where(RefreshToken.user_id == user_id, RefreshToken.revoked_at.is_(None))
             .values(revoked_at=datetime.now(UTC), revoked_reason=reason)
         )
+
+    async def delete_stale(self, *, retention_days: int) -> int:
+        cutoff = datetime.now(UTC) - timedelta(days=retention_days)
+        result = await self.session.execute(
+            delete(RefreshToken)
+            .where(
+                or_(
+                    RefreshToken.expires_at < cutoff,
+                    RefreshToken.revoked_at < cutoff,
+                )
+            )
+            .execution_options(synchronize_session=False)
+        )
+        return int(result.rowcount or 0)

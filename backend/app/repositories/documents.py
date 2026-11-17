@@ -79,6 +79,14 @@ class DocumentRepository:
         result = await self.session.execute(stmt)
         return list(result.scalars().all()), total
 
+    async def total_file_size(self, user_id: uuid.UUID) -> int:
+        result = await self.session.execute(
+            select(func.coalesce(func.sum(Document.file_size), 0)).where(
+                Document.user_id == user_id
+            )
+        )
+        return int(result.scalar_one())
+
     async def stats(self, user_id: uuid.UUID) -> dict[str, int]:
         result = await self.session.execute(
             select(
@@ -107,6 +115,12 @@ class DocumentRepository:
             "total_chunks": int(row[4]),
             "total_pages": int(row[5]),
         }
+
+    async def list_storage_keys_for_user(self, user_id: uuid.UUID) -> list[str]:
+        result = await self.session.execute(
+            select(Document.storage_key).where(Document.user_id == user_id)
+        )
+        return list(result.scalars().all())
 
     async def delete(self, document: Document) -> None:
         await self.session.delete(document)

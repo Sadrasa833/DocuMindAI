@@ -17,14 +17,17 @@ from app.core.security import decode_token
 from app.db.session import get_db_session
 from app.models.user import User
 from app.repositories.users import UserRepository
+from app.services.account import AccountService
 from app.services.auth import AuthService
 from app.services.conversations import ConversationService
 from app.services.dispatch import CeleryTaskDispatcher, TaskDispatcher
 from app.services.documents import DocumentService
+from app.services.email import EmailSender, create_email_sender
 from app.services.embeddings import EmbeddingService
 from app.services.rag import RAGService
+from app.services.scanning import ClamAVScanner, MalwareScanner
 from app.services.search import SearchService
-from app.services.storage import LocalStorageBackend, StorageBackend
+from app.services.storage import StorageBackend, create_storage_backend
 from app.services.summarization import SummarizationService
 
 bearer_scheme = HTTPBearer(auto_error=False, description="Optional JWT access token")
@@ -41,8 +44,39 @@ def get_auth_service(session: DbSession, settings: SettingsDep) -> AuthService:
 
 
 @lru_cache(maxsize=1)
+def get_email_sender() -> EmailSender:
+    return create_email_sender(get_settings())
+
+
+@lru_cache(maxsize=1)
 def get_storage_backend() -> StorageBackend:
-    return LocalStorageBackend(get_settings())
+    return create_storage_backend(get_settings())
+
+
+def get_account_service(
+    session: DbSession,
+    settings: SettingsDep,
+    email_sender: Annotated[EmailSender, Depends(get_email_sender)],
+    storage: Annotated[StorageBackend, Depends(get_storage_backend)],
+) -> AccountService:
+    return AccountService(
+        session,
+        settings=settings,
+        email_sender=email_sender,
+        storage=storage,
+    )
+
+
+@lru_cache(maxsize=1)
+def get_malware_scanner() -> MalwareScanner | None:
+    settings = get_settings()
+    if not settings.malware_scanning_enabled:
+        return None
+    return ClamAVScanner(
+        host=settings.clamav_host,
+        port=settings.clamav_port,
+        timeout_seconds=settings.clamav_timeout_seconds,
+    )
 
 
 @lru_cache(maxsize=1)
@@ -76,8 +110,15 @@ def get_document_service(
     settings: SettingsDep,
     storage: Annotated[StorageBackend, Depends(get_storage_backend)],
     dispatcher: Annotated[TaskDispatcher, Depends(get_task_dispatcher)],
+    malware_scanner: Annotated[MalwareScanner | None, Depends(get_malware_scanner)],
 ) -> DocumentService:
-    return DocumentService(session, settings=settings, storage=storage, dispatcher=dispatcher)
+    return DocumentService(
+        session,
+        settings=settings,
+        storage=storage,
+        dispatcher=dispatcher,
+        malware_scanner=malware_scanner,
+    )
 
 
 def get_search_service(

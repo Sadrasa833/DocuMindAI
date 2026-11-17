@@ -18,6 +18,24 @@ from app.services.embeddings import EmbeddingService
 _TOKEN_PATTERN = re.compile(r"[a-z0-9]+")
 
 
+class FakeEmailSender:
+    def __init__(self) -> None:
+        self.messages: list[dict[str, str]] = []
+
+    async def send(self, *, to: str, subject: str, text: str) -> None:
+        self.messages.append({"to": to, "subject": subject, "text": text})
+
+    def latest_token(self, purpose: str) -> str:
+        import re
+
+        marker = "reset-password" if purpose == "password_reset" else "verify-email"
+        for message in reversed(self.messages):
+            match = re.search(rf"{marker}\?token=([A-Za-z0-9_\-]+)", message["text"])
+            if match:
+                return match.group(1)
+        raise AssertionError(f"No {purpose} token email was sent")
+
+
 class FakeTaskDispatcher:
     def __init__(self) -> None:
         self.enqueued: list[uuid.UUID] = []

@@ -8,19 +8,19 @@ The repository contains a FastAPI backend, a Next.js dashboard, a Celery worker,
 
 Verified in this workspace:
 
-- Backend: **86 tests passed and 9 integration tests were skipped** on Python 3.14 with SQLite and mocked AI providers.
-- Backend: **90% line coverage** across `app/`.
+- Backend default suite: **86 tests passed, 9 infrastructure tests skipped** on Python 3.14 with SQLite and mocked AI providers.
+- Backend: **90% line coverage** across `app/` for the default suite.
 - Backend: Ruff lint and formatting checks pass.
+- Infrastructure: **10 integration tests passed** against the live Compose stack, covering PostgreSQL 16/pgvector migrations from an empty schema, vector search, HNSW usage, ownership isolation, Redis, Celery processing, Persian OCR, and Celery Beat recovery.
+- Docker Compose health checks passed for backend, worker, beat, PostgreSQL, Redis, and the mock AI service.
+- The Celery worker was restarted and the Docker/Celery suite passed again.
 - Frontend: TypeScript, ESLint, and the Next.js production build pass.
 - Docker Compose configuration parses successfully with the example environment.
 
 Not verified in this workspace:
 
-- The Docker Compose stack was not started because the Docker daemon was unavailable.
-- PostgreSQL/pgvector, Redis, Celery, Alembic, and container health checks were not exercised against running services; the 9 integration tests requiring them were skipped.
-- No live OpenAI request was made.
-- Playwright browser E2E tests were not executed because the running stack and bundled browser were unavailable.
-- Real Tesseract OCR was not exercised outside the container; OCR unit tests use a fake engine.
+- No live OpenAI request was made; infrastructure tests use the deterministic mock AI service.
+- Playwright browser E2E tests were not executed because a compatible browser was unavailable.
 
 See [Testing](#testing) and [Known limitations](#known-limitations) for details.
 
@@ -29,8 +29,9 @@ See [Testing](#testing) and [Known limitations](#known-limitations) for details.
 ### Documents
 
 - Multi-user PDF upload with authentication and ownership isolation.
-- PDF signature, extension, MIME type, size, and path-safety validation.
-- 20 MB upload limit by default; configurable up to 100 MB.
+- PDF extension, MIME type, signature, parseability, size, and path-safety validation.
+- 20 MB per-file upload limit and 1 GB per-user storage quota by default.
+- Local or S3-compatible storage, with optional ClamAV malware scanning.
 - Text extraction with page numbers, OCR fallback for scanned pages, and overlapping chunking.
 - Asynchronous processing through Celery and Redis.
 - Processing status, retry behavior, error reporting, and idempotent task handling.
@@ -274,12 +275,26 @@ All application settings are documented in `.env.example`. The most important va
 | `CORS_ORIGINS` | `http://localhost:3000` | Comma-separated explicit origins. Wildcards are rejected. |
 | `COOKIE_SECURE` | `false` | Must be `true` in production and whenever SameSite is `none`. |
 | `REFRESH_REUSE_GRACE_SECONDS` | `30` | Window in which racing refreshes retry instead of revoking the session family. |
-| `MAX_UPLOAD_SIZE_MB` | `20` | Upload limit. |
+| `MAX_UPLOAD_SIZE_MB` | `20` | Per-file upload limit. |
+| `USER_STORAGE_QUOTA_MB` | `1024` | Total stored PDF bytes allowed per user. |
+| `STORAGE_BACKEND` | `local` | `local` or `s3` for S3-compatible object storage. |
+| `S3_BUCKET` / `S3_PREFIX` / `S3_REGION` | unset / empty / `us-east-1` | S3 destination; bucket is required when the backend is `s3`. |
+| `S3_ENDPOINT_URL` | unset | Custom endpoint such as MinIO; leave unset for AWS S3. |
+| `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` | unset | Optional static credentials. Set both or neither; otherwise the AWS credential chain is used. |
+| `S3_USE_SSL` | `true` | TLS for S3 requests. |
+| `MALWARE_SCANNING_ENABLED` | `false` | Enables ClamAV INSTREAM scanning before storage. |
+| `CLAMAV_HOST` / `CLAMAV_PORT` | `localhost` / `3310` | ClamAV daemon endpoint. |
+| `CLAMAV_TIMEOUT_SECONDS` | `10` | Scanner connection/read timeout; failures fail closed with `503`. |
 | `CHUNK_SIZE` / `CHUNK_OVERLAP` | `1000` / `200` | Text chunking behavior. |
 | `SEARCH_DEFAULT_TOP_K` | `5` | Default semantic-search result count. |
 | `SEARCH_MIN_SIMILARITY` | `0.2` | Minimum cosine similarity accepted for search and RAG. |
 | `RAG_MAX_CONTEXT_CHUNKS` | `8` | Maximum retrieved passages sent to the chat model. |
 | `RAG_HISTORY_MESSAGES` | `8` | Prior conversation messages included for follow-ups. |
+| `RAG_CITATION_VALIDATION_ENABLED` | `true` | Enables claim-level citation support checks. |
+| `RAG_CITATION_MIN_SUPPORT` | `0.55` | Minimum claim/source evidence coverage required to keep a citation. |
+| `RAG_CITATION_REQUIRE_CITATIONS` | `true` | Returns the insufficient-evidence response when an answer has no supported citation. |
+| `RAG_CITATION_SEMANTIC_CHECK` | `false` | Adds a batched claim-embedding semantic check; costs one extra embedding request per answer. |
+| `RAG_CITATION_SEMANTIC_THRESHOLD` | `0.45` | Minimum claim/source cosine similarity when semantic checking is enabled. |
 | `SUMMARY_MAP_CHUNK_CHARS` | `12000` | Map-phase input grouping. |
 | `SUMMARY_REDUCE_CHUNK_CHARS` | `20000` | Reduce-phase grouping. |
 | `RATE_LIMIT_ENABLED` | `true` | Enables endpoint-specific Redis rate limits. |
@@ -292,6 +307,8 @@ Production validation requires:
 - A non-placeholder `SECRET_KEY`
 - Explicit `CORS_ORIGINS` without wildcards
 - HTTPS at the edge
+- A non-empty `S3_BUCKET` when `STORAGE_BACKEND=s3`, with matching credentials and optional prefix
+- A reachable ClamAV daemon when `MALWARE_SCANNING_ENABLED=true`; scanning fails closed
 
 If the embedding model returns a different vector dimension, update the database column, HNSW index, `EMBEDDING_DIMENSIONS`, and the Alembic migration together, then reprocess every document. Changing `EMBEDDING_DIMENSIONS` alone is not sufficient.
 
@@ -389,14 +406,37 @@ python -m ruff format --check app tests alembic
 Covered areas include:
 
 - Registration/login, cookie issuance, refresh rotation, concurrent-refresh grace, reuse detection, logout, profile, and password changes.
-- Upload validation, traversal rejection, size limits, ownership, filtering, pagination, sorting, stats, and deletion.
+- Upload validation, traversal rejection, size and per-user quota limits, local/S3 storage behavior, optional malware scanning, ownership, filtering, pagination, sorting, stats, and deletion.
 - PDF extraction, OCR fallback, chunking, embedding, idempotency, failure handling, stuck-document recovery, and document status transitions.
 - Semantic search, similarity thresholds, filters, and cross-user isolation.
-- RAG citations, conversation persistence, history handling, weak-context shortcuts, and prompt-injection boundaries.
+- RAG citations, claim-level source validation, conversation persistence, history handling, weak-context shortcuts, and prompt-injection boundaries.
 - Summary caching, force regeneration, map-reduce behavior, and long-summary reduction progress.
 - Health checks, error envelopes, request IDs, CORS, rate limiting, and OpenAPI route registration.
 - Configuration validation for CORS wildcards and production security settings.
-- RAG evaluation metrics, including retrieval hit rate and MRR.
+- RAG evaluation metrics, including retrieval hit rate, MRR, citation precision/recall, unsupported-citation rate, and refusal accuracy.
+
+### RAG benchmark
+
+`backend/evals/dataset.json` contains 110 questions across 10 synthetic policy documents. Every answerable question has a reference answer, expected document/page, and keywords verified against that source page; 10 additional questions are deliberately unanswerable.
+
+Validate the dataset without starting the API:
+
+```powershell
+Set-Location backend
+python -m evals.rag_eval --validate-only
+```
+
+Run retrieval against the integration stack with deterministic mock embeddings:
+
+```powershell
+python -m evals.rag_eval --base-url http://localhost:8001 --retrieval-only --top-k 8 --output evals/latest_retrieval_mock.json
+```
+
+The checked-in mock report shows 96.0% hit@8 and 0.804 MRR over 100 answerable questions. This exercises the real upload, PostgreSQL/pgvector, chunking, and retrieval path, but the mock embeddings are not a production quality measurement. A full answer evaluation requires a real chat model:
+
+```powershell
+python -m evals.rag_eval --base-url http://localhost:8001 --top-k 8
+```
 
 Frontend verification:
 
@@ -408,7 +448,27 @@ npm.cmd run build
 npx.cmd playwright test
 ```
 
-The test suite intentionally uses SQLite for speed and portability. It does not execute the PostgreSQL/pgvector query path or migrations. Run the Compose smoke test below before a production release. The Playwright command requires the stack to be running and a compatible browser; set `PLAYWRIGHT_CHANNEL=chrome` to use a locally installed Chrome.
+The default test suite intentionally uses SQLite for speed and portability. The integration suites below execute the PostgreSQL/pgvector query path, migrations, Redis, Celery, and OCR against real containers. The Playwright command requires the running stack and a compatible browser; set `PLAYWRIGHT_CHANNEL=chrome` to use a locally installed Chrome.
+
+### Infrastructure integration tests
+
+Prerequisites: Docker Engine/Desktop is running, `.env` is present, and the configured host ports are free. The integration overlay uses the deterministic mock AI service, disables rate limits, and makes no paid OpenAI requests.
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.integration.yml up -d --build postgres redis mock-ai backend celery-worker celery-beat
+docker compose -f docker-compose.yml -f docker-compose.integration.yml exec -T backend python tests/integration/run_suite.py
+```
+
+The runner creates a `<database>_test` database, drops and recreates only that test schema, applies every Alembic migration from empty, and runs the PostgreSQL/pgvector and Docker/Celery suites. It never migrates or truncates the application database. Use `--suite postgres` or `--suite docker` to run one suite.
+
+To verify worker restart and recovery, restart the worker and rerun the Docker/Celery suite:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.integration.yml restart celery-worker
+docker compose -f docker-compose.yml -f docker-compose.integration.yml exec -T backend python tests/integration/run_suite.py --suite docker
+```
+
+Stop the stack with `docker compose -f docker-compose.yml -f docker-compose.integration.yml down`. Add `-v` only when you also want to delete PostgreSQL data, Redis data, and uploads.
 
 ### PostgreSQL smoke test
 
@@ -435,7 +495,7 @@ Then use the dashboard to upload a PDF, wait for `completed`, run search, ask a 
 - The API sets `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, and `Permissions-Policy`.
 - Production requires secure cookies and explicit CORS origins.
 
-For internet-facing deployment, also use TLS, a reverse proxy, private database/Redis networks, secret management, malware scanning for uploads, and centralized log monitoring.
+For internet-facing deployment, also use TLS, a reverse proxy, private database/Redis networks, secret management, S3-compatible storage or a shared upload volume, malware scanning for uploads, and centralized log monitoring.
 
 ## Project structure
 
@@ -454,6 +514,7 @@ For internet-facing deployment, also use TLS, a reverse proxy, private database/
 │   │   ├── utils/           # PDF text/chunking and upload helpers
 │   │   └── workers/         # Celery application and processing tasks
 │   ├── alembic/             # Initial pgvector migration
+│   ├── evals/               # Verified RAG benchmark dataset, harness, and report
 │   ├── tests/               # Backend test suite and fakes
 │   ├── Dockerfile
 │   ├── docker-entrypoint.sh
@@ -476,17 +537,19 @@ For internet-facing deployment, also use TLS, a reverse proxy, private database/
 
 ## Known limitations
 
-- Local filesystem storage is used by default. Horizontal backend scaling requires shared storage or an S3-compatible adapter.
+- Local filesystem storage is used by default. Horizontal backend scaling requires shared local storage or `STORAGE_BACKEND=s3`.
+- Storage quotas are enforced per user across all stored PDFs; plan-based quota tiers are not implemented.
 - The application only accepts PDFs. Scanned pages are processed with Tesseract when OCR is enabled and the configured language packs are installed; OCR quality depends on scan quality, and the configured page/time limits still apply.
+- Citation validation is deterministic by default. Heavily paraphrased claims may be refused unless `RAG_CITATION_SEMANTIC_CHECK=true`; it is not a formal entailment proof.
 - Chat responses are not streamed; the request waits for the full model response.
 - Document summaries are generated synchronously during the HTTP request and can be slow for large documents.
-- There is no email verification, password-reset email flow, account deletion, or storage quota enforcement.
-- Uploaded files are not virus-scanned.
+- There is no email verification, password-reset email flow, or account deletion.
+- Malware scanning is optional and disabled by default. When enabled, it requires a reachable ClamAV daemon and fails closed.
 - A worker process killed without raising a Python exception can leave a document in `processing`; a periodic Celery Beat task recovers stale rows, but operator intervention is still required if Beat is not running.
 - Deleting a document removes its file, chunks, and searchability, but citations in historical chat messages are retained as a record and can point to the deleted document.
 - Rate limits are per client IP and depend on correct trusted-proxy configuration when deployed behind a gateway.
 - Refresh-token history has no scheduled retention cleanup.
-- The automated suite uses SQLite; PostgreSQL/pgvector, Redis, Celery, Alembic, and Docker were not executed in this workspace.
+- The default suite uses SQLite; PostgreSQL/pgvector, Redis, Celery, and Alembic are covered by opt-in integration tests that require the Compose stack.
 - Playwright browser E2E tests are included but were not executed in this workspace because they require the running Compose stack and an installed browser.
 
 ## Contributing

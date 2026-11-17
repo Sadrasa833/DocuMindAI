@@ -1,9 +1,15 @@
 from __future__ import annotations
 
+import asyncio
 import uuid
+from pathlib import Path
 
 from httpx import AsyncClient
 
+from app.api.deps import get_malware_scanner
+from app.core.exceptions import MalwareDetectedError
+from app.main import app
+from app.repositories.documents import DocumentRepository
 from tests.conftest import TEST_UPLOAD_PATH, fake_dispatcher, settings
 from tests.fakes import DEFAULT_PAGES, make_pdf, register_user, upload_pdf
 
@@ -52,6 +58,12 @@ async def test_upload_rejects_invalid_files(client: AsyncClient) -> None:
         files={"file": ("agreement.pdf", b"not really a pdf", "application/pdf")},
     )
     assert fake_pdf.status_code == 415
+
+    truncated_pdf = await client.post(
+        "/api/v1/documents/upload",
+        files={"file": ("agreement.pdf", b"%PDF-1.7\nnot a complete PDF", "application/pdf")},
+    )
+    assert truncated_pdf.status_code == 415
 
     empty = await client.post(
         "/api/v1/documents/upload",
@@ -165,6 +177,59 @@ async def test_delete_document_removes_file_and_chunks(client_factory, process_d
     search = await alice.post("/api/v1/search", json={"query": "payment terms", "top_k": 5})
     assert search.status_code == 200
     assert search.json()["results"] == []
+
+
+async def test_upload_enforces_user_storage_quota(client: AsyncClient, monkeypatch) -> None:
+    await register_user(client)
+
+    async def full_quota(_self: DocumentRepository, _user_id: uuid.UUID) -> int:
+        return settings.user_storage_quota_bytes
+
+    monkeypatch.setattr(DocumentRepository, "total_file_size", full_quota)
+    response = await upload_pdf(client)
+
+    assert response.status_code == 413
+    assert response.json()["error"]["code"] == "storage_quota_exceeded"
+    assert not list(TEST_UPLOAD_PATH.rglob("*.pdf"))
+    assert fake_dispatcher.enqueued == []
+
+
+async def test_upload_runs_configured_malware_scanner(client: AsyncClient) -> None:
+    await register_user(client)
+    scanned: list[bool] = []
+
+    class RecordingScanner:
+        async def scan(self, path: Path) -> None:
+            scanned.append(await asyncio.to_thread(path.is_file))
+
+    app.dependency_overrides[get_malware_scanner] = lambda: RecordingScanner()
+    try:
+        response = await upload_pdf(client)
+    finally:
+        app.dependency_overrides.pop(get_malware_scanner)
+
+    assert response.status_code == 201, response.text
+    assert scanned == [True]
+    assert list(TEST_UPLOAD_PATH.rglob("*.pdf"))
+
+
+async def test_upload_rejects_malware_positive_file(client: AsyncClient) -> None:
+    await register_user(client)
+
+    class RejectingScanner:
+        async def scan(self, _path: Path) -> None:
+            raise MalwareDetectedError("The uploaded file failed malware scanning")
+
+    app.dependency_overrides[get_malware_scanner] = lambda: RejectingScanner()
+    try:
+        response = await upload_pdf(client)
+    finally:
+        app.dependency_overrides.pop(get_malware_scanner)
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "malware_detected"
+    assert not list(TEST_UPLOAD_PATH.rglob("*.pdf"))
+    assert fake_dispatcher.enqueued == []
 
 
 async def test_unauthenticated_document_access_is_rejected(client: AsyncClient) -> None:

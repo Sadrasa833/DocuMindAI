@@ -330,3 +330,35 @@ async def test_chat_validates_question_and_ownership(
         json={"question": "hello", "conversation_id": str(uuid.uuid4())},
     )
     assert missing_conversation.status_code == 404
+
+
+async def test_chat_rejects_valid_but_irrelevant_citations(
+    client: AsyncClient, processed_document, chat_provider
+) -> None:
+    await register_user(client)
+    await processed_document(client)
+    chat_provider.response = "The agreement was signed in Paris [S1]."
+
+    response = await client.post("/api/v1/chat", json={"question": "What are the payment terms?"})
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["answer"] == INSUFFICIENT_CONTEXT_ANSWER
+    assert body["citations"] == []
+    conversation = await client.get(f"/api/v1/conversations/{body['conversation_id']}")
+    assert conversation.json()["messages"][-1]["content"] == INSUFFICIENT_CONTEXT_ANSWER
+
+
+async def test_chat_requires_citations_for_factual_answers(
+    client: AsyncClient, processed_document, chat_provider
+) -> None:
+    await register_user(client)
+    await processed_document(client)
+    chat_provider.response = "Payment is due in 30 days."
+
+    response = await client.post("/api/v1/chat", json={"question": "What are the payment terms?"})
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["answer"] == INSUFFICIENT_CONTEXT_ANSWER
+    assert body["citations"] == []

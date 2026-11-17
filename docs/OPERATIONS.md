@@ -31,7 +31,7 @@ Recommendations:
 - Expose only the frontend and, if needed, the API through the proxy. Do not publish PostgreSQL, Redis, or Celery ports.
 - Place PostgreSQL and Redis on a private network.
 - Set `BACKEND_URL` on the Next.js runtime to the private backend URL.
-- Use a shared upload volume or an object-storage adapter for every backend and worker replica.
+- Use a shared upload volume or configure the S3-compatible backend for every backend and worker replica.
 - Run at least one API replica, one or more workers, and a managed or highly available PostgreSQL/Redis deployment according to availability requirements.
 - Set `LOG_JSON=true` and ship logs to a centralized system.
 - Use a secret manager rather than committing or baking secrets into images.
@@ -145,7 +145,7 @@ Do not deploy a new dimension setting while old vectors remain in the database.
 Back up both durable data stores:
 
 - PostgreSQL: users, documents, chunks, vectors, conversations, and refresh-token state.
-- Uploaded files: the `uploads_data` volume or configured storage path.
+- Uploaded files: the `uploads_data` volume, configured storage path, or S3-compatible bucket.
 
 PostgreSQL dump example:
 
@@ -180,7 +180,7 @@ Suggested alerts:
 - OpenAI error rate, latency, and token usage.
 - PostgreSQL connections, disk, and slow queries.
 - Redis memory and eviction events.
-- Upload volume free space.
+- Upload volume free space or S3 bucket capacity, request errors, and lifecycle policy.
 
 Request logs include method, path, status code, duration, and request ID. Correlate support reports with `X-Request-ID`. The API does not currently expose Prometheus metrics; add an instrumentation layer before relying on metric-based alerting.
 
@@ -202,15 +202,15 @@ The API is stateless except for local storage and Redis-backed rate limits. Scal
 - Database
 - Redis
 - `BACKEND_URL` target from the frontend
-- Upload storage
+- Upload storage and `STORAGE_BACKEND`
 
-If local disk storage is used, all backend replicas must mount the same shared volume. Object storage is the cleaner long-term option.
+If local disk storage is used, all backend replicas must mount the same shared volume. Configure the S3-compatible backend for multi-replica deployments. The API and workers must use the same bucket, prefix, and credentials.
 
 ### Workers
 
 Celery concurrency is CPU-, memory-, and network-bound by PDF parsing and embedding batches. Increase worker replicas before increasing concurrency on a single worker if memory is constrained.
 
-Workers must mount the same upload storage as the API. They share PostgreSQL and Redis configuration.
+Workers must use the same upload storage as the API. They share PostgreSQL, Redis, S3 credentials, and ClamAV configuration.
 
 ### Database
 
@@ -266,12 +266,16 @@ Rollback application images only after checking schema compatibility. Do not ass
 
 | Symptom | Likely cause | Action |
 |---|---|---|
+| Upload returns 413 with `storage_quota_exceeded` | The user's stored PDFs reached `USER_STORAGE_QUOTA_MB` | Delete unneeded documents or raise the quota. |
+| Upload returns 503 with `malware_scanner_unavailable` | ClamAV is enabled but unreachable or returned an invalid response | Check `CLAMAV_HOST`, `CLAMAV_PORT`, daemon health, and firewall rules; disable scanning only with an explicit security decision. |
+| Upload returns 400 with `malware_detected` | ClamAV identified the file | Treat the upload as hostile and review client/user activity. |
+| S3 upload or processing fails | Bucket, endpoint, credentials, prefix, or TLS misconfigured | Verify `S3_*` settings, bucket existence, IAM permissions, and connectivity from API and worker containers. |
 | Upload returns 503 or document becomes `failed` with queue message | Redis or Celery unavailable | Check Redis, `celery-worker` logs, broker URL, and worker health. |
 | Document remains `pending` | Worker not running or broker unreachable | Start/inspect the worker and Celery queue. |
 | Document remains `processing` indefinitely | Worker crashed during processing or Celery Beat is not running | Inspect worker and Beat logs; the recovery task requeues stale rows automatically. If Beat is disabled, reset the row to `pending` and enqueue again after confirming no worker is active. |
 | Document fails with an OCR message | OCR is disabled, Tesseract or a language pack is missing, or page/time limits were exceeded | Check `OCR_ENABLED`, `OCR_LANGUAGES`, `OCR_MAX_PAGES`, `OCR_TIMEOUT_SECONDS`, and the worker image's Tesseract packages. |
 | Search returns no results | No completed chunks, weak query, or similarity below `SEARCH_MIN_SIMILARITY` | Check document status, lower the threshold cautiously, or query more specific terms. |
-| Chat says there is insufficient context | Retrieval returned no chunks above the threshold | Verify chunks exist, selected document IDs are completed, and embeddings match the query model. |
+| Chat says there is insufficient context | Retrieval returned no chunks above the threshold, or no cited claim passed validation | Verify chunks exist, selected document IDs are completed, and embeddings match the query model. If retrieval succeeds, inspect discarded-citation logs; consider `RAG_CITATION_SEMANTIC_CHECK=true` or a lower `RAG_CITATION_MIN_SUPPORT` only after manual review. |
 | 502 from `/api/proxy/*` | Frontend cannot reach `BACKEND_URL` | Check DNS/service name, network, backend health, and container logs. |
 | 401 loop or immediate login redirect | Stale cookies or clock/signature mismatch | Clear site cookies, verify `SECRET_KEY` consistency, and inspect refresh/logout behavior. |
 | CORS error | Origin missing from `CORS_ORIGINS` or wildcard rejected | Add the exact scheme/host/port and restart the backend. |
@@ -293,7 +297,8 @@ Rollback application images only after checking schema compatibility. Do not ass
 - [ ] Migration applied once and backups verified.
 - [ ] Redis private and healthy.
 - [ ] Celery worker connected and task processing verified.
-- [ ] Upload volume shared or object storage configured.
+- [ ] Upload volume shared or S3-compatible object storage configured and tested.
+- [ ] Per-user quota and optional ClamAV scanning settings reviewed.
 - [ ] Rate limits and timeouts tuned for expected traffic.
 - [ ] Logs centralized and secrets excluded.
 - [ ] Monitoring and alerting configured for API, queue, database, Redis, and AI failures.

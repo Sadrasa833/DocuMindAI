@@ -4,16 +4,28 @@ import io
 import os
 import time
 import uuid
+from pathlib import Path
 
 import httpx
 import psycopg
 import pytest
+from PIL import Image
 from pypdf import PdfReader
 
 from tests.fakes import make_pdf, make_scanned_pdf
 
 DOCKER_E2E_BASE_URL = os.environ.get("DOCKER_E2E_BASE_URL")
 DOCKER_E2E_DATABASE_URL = os.environ.get("DOCKER_E2E_DATABASE_URL")
+_PERSIAN_OCR_IMAGE = Path(__file__).resolve().parents[1] / "fixtures" / "persian-scanned.png"
+
+
+def _make_persian_scanned_pdf() -> bytes:
+    buffer = io.BytesIO()
+    with Image.open(_PERSIAN_OCR_IMAGE) as image:
+        image.convert("RGB").save(buffer, "PDF", resolution=200.0)
+    return buffer.getvalue()
+
+
 pytestmark = [
     pytest.mark.docker,
     pytest.mark.skipif(
@@ -163,6 +175,53 @@ def test_docker_celery_ocrs_an_image_only_pdf() -> None:
         assert results
         content = " ".join(result["content"] for result in results).lower()
         assert any(word in content for word in ("payment", "invoice", "agreement"))
+
+
+@pytest.mark.skipif(
+    not DOCKER_E2E_DATABASE_URL,
+    reason="Set DOCKER_E2E_DATABASE_URL to verify Persian OCR output",
+)
+def test_docker_celery_ocrs_a_persian_scanned_pdf() -> None:
+    assert DOCKER_E2E_BASE_URL is not None
+    assert DOCKER_E2E_DATABASE_URL is not None
+    scanned = _make_persian_scanned_pdf()
+    assert not "".join(
+        page.extract_text() or "" for page in PdfReader(io.BytesIO(scanned)).pages
+    ).strip()
+
+    email = f"docker-e2e-persian-{uuid.uuid4().hex[:12]}@example.com"
+
+    with httpx.Client(base_url=DOCKER_E2E_BASE_URL, timeout=30.0, follow_redirects=True) as client:
+        registered = client.post(
+            "/api/v1/auth/register",
+            json={
+                "email": email,
+                "password": "SecurePass123",
+                "full_name": "Docker E2E Persian OCR",
+            },
+        )
+        assert registered.status_code == 201, registered.text
+
+        upload = client.post(
+            "/api/v1/documents/upload",
+            files={"file": ("persian-scanned.pdf", scanned, "application/pdf")},
+        )
+        assert upload.status_code == 201, upload.text
+        document = upload.json()
+
+        processed = _wait_for_status(client, document["id"], "completed")
+        assert processed["page_count"] == 1
+        assert processed["chunk_count"] >= 1
+
+    with psycopg.connect(DOCKER_E2E_DATABASE_URL) as connection:
+        rows = connection.execute(
+            "SELECT content FROM document_chunks WHERE document_id = %s",
+            (uuid.UUID(document["id"]),),
+        ).fetchall()
+    content = "\n".join(row[0] for row in rows)
+    assert "قرارداد" in content
+    assert "پرداخت" in content
+    assert "سی روز" in content
 
 
 def test_docker_celery_marks_unprocessable_document_failed() -> None:

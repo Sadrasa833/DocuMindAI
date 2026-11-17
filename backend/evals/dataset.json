@@ -1,64 +1,1498 @@
 {
-  "name": "documind-rag-smoke-v1",
-  "description": "Small bilingual-friendly RAG smoke set for retrieval, citation, and refusal metrics.",
+  "name": "documind-rag-benchmark-v2",
+  "description": "Verified 110-question RAG benchmark across vendor, security, HR, retention, cloud, support, procurement, roadmap, facilities, and API policy documents.",
   "documents": [
     {
-      "filename": "msa-agreement.pdf",
+      "filename": "northwind-vendor-agreement.pdf",
       "pages": [
-        "Acme Services Agreement. Payment terms are net thirty days from the invoice date. Late payments accrue interest at one percent per month. All invoices must reference the purchase order number.",
-        "The agreement renews annually unless either party gives sixty days written notice before the renewal date. Either party may terminate for a material breach after a thirty day written cure period. Confidential information must be protected for five years after termination."
+        "Northwind Vendor Agreement. Northwind invoices are due net 45 days from the invoice date. Late balances accrue a 1.5 percent monthly fee. Invoices must be sent to ap@northwind.example.",
+        "The Northwind agreement has an initial term of 24 months. It renews for successive 12 month periods unless either party gives 90 days written notice before renewal. Renewal notices must be sent to the legal team.",
+        "Northwind may be terminated for convenience with 30 days written notice. A material breach requires a 15 day written cure period before termination. Termination notices must reference the agreement date.",
+        "Confidentiality obligations survive for 5 years after termination. Northwind must return or destroy confidential data within 30 days after termination. A written certification of destruction is required.",
+        "Northwind liability is capped at $500,000 per claim. The agreement is governed by Delaware law. Disputes must be filed in New Castle County, Delaware."
       ]
     },
     {
-      "filename": "security-policy.pdf",
+      "filename": "information-security-policy.pdf",
       "pages": [
-        "Information Security Policy. Production access requires multi-factor authentication. Encryption at rest uses AES-256. Backups are retained for thirty-five days and are tested monthly.",
-        "Security incidents must be reported to the security team within seventy-two hours. Access reviews occur quarterly. Suspected data loss must be escalated immediately."
+        "Information Security Policy. Production and administrative access requires multi-factor authentication. Accounts lock after five failed login attempts. Passwords must contain at least 16 characters.",
+        "Data at rest is encrypted with AES-256. Data in transit must use TLS 1.3. Backups are retained for 35 days and tested monthly.",
+        "Security incidents must be reported to the security team within one hour. A security incident postmortem is due within 5 business days. The security on-call pager is available around the clock.",
+        "Access reviews occur quarterly. Access for terminated employees is removed within 24 hours. Privileged access is recertified annually.",
+        "Security logs are retained for 12 months. Critical vulnerabilities must be patched within 7 days. An external penetration test is performed annually."
+      ]
+    },
+    {
+      "filename": "employee-handbook.pdf",
+      "pages": [
+        "Employee Handbook. Full-time employees receive 20 days of paid time off each year. Employees may carry over 5 unused PTO days. PTO requests longer than 3 days need two weeks advance notice.",
+        "Employees may work remotely 3 days per week. Core collaboration hours are 10am to 3pm local time. Remote employees receive a $75 monthly internet stipend.",
+        "Expense reports are due within 30 days of purchase. Itemized receipts are required for expenses over $25. Approved reimbursements are paid within 10 business days.",
+        "Parental leave provides 16 weeks of paid leave. Employees receive 10 days of paid sick leave each year. Bereavement leave provides 5 days.",
+        "Harassment can be reported to HR or the ethics hotline. HR acknowledges reports within 2 business days. Retaliation against reporters is prohibited."
+      ]
+    },
+    {
+      "filename": "data-retention-policy.pdf",
+      "pages": [
+        "Data Retention Policy. Customer records are retained for 7 years after contract end. Deletion requests are completed within 30 days unless a legal hold applies. Support tickets are retained for 3 years.",
+        "Employee records are retained for 6 years after departure. Payroll records are retained for 7 years. Recruitment records are kept for 2 years.",
+        "Audit logs are retained for 13 months. Security logs are retained for 18 months. Access logs are retained for 12 months.",
+        "A legal hold suspends all deletion activity. Legal must be notified within 2 business days. Each legal hold is reviewed annually.",
+        "Data retention backup copies are kept for 45 days. Deleted data is purged from backups within 60 days. Backup restore tests run quarterly."
+      ]
+    },
+    {
+      "filename": "cloud-architecture-standard.pdf",
+      "pages": [
+        "Cloud Architecture Standard. The primary region is us-east-1 and the disaster recovery region is eu-west-1. The recovery time objective is 4 hours. The recovery point objective is 15 minutes.",
+        "Autoscaling targets 65 percent CPU utilization. Each service runs between 3 and 30 instances. Scale-out cooldown is 3 minutes.",
+        "Prometheus collects metrics every 15 seconds. Alerts page the on-call engineer when the 5xx rate exceeds 2 percent for 5 minutes. Dashboards retain 30 days of data.",
+        "Production deployments occur Tuesday and Thursday from 9am to 11am ET. A canary receives 10 percent of traffic. Rollback completes within 5 minutes.",
+        "The PostgreSQL read replica is in ca-central-1. CloudFront caches content for 300 seconds. Vault rotates secrets every 90 days."
+      ]
+    },
+    {
+      "filename": "customer-support-playbook.pdf",
+      "pages": [
+        "Customer Support Playbook. P1 tickets require a first response within 15 minutes. P2 tickets require a response within 1 hour. P3 tickets require a response within 4 hours.",
+        "A P1 incident is a complete outage affecting all users. A P2 incident is a major feature that is degraded. A P3 incident affects a single user.",
+        "Escalate to the support lead after 30 minutes without a response. The incident commander joins after 60 minutes. Executive notification occurs after 2 hours.",
+        "Customers may request a refund within 14 days of purchase. Manager approval is required for refunds over $500. Refunds are processed within 5 business days.",
+        "The public status page is updated within 30 minutes of a customer outage. Updates are posted hourly. A customer-outage postmortem is published within 3 business days."
+      ]
+    },
+    {
+      "filename": "procurement-policy.pdf",
+      "pages": [
+        "Procurement Policy. Purchases under $5,000 require manager approval. Purchases from $5,000 to $50,000 require director approval. Purchases over $50,000 require VP and finance approval.",
+        "Three written quotes are required above $25,000. Two quotes are required from $10,000 to $25,000. A sole-source purchase requires a CFO waiver.",
+        "Vendor security reviews take 10 business days. Vendors must provide a W-9 tax form. Vendors must carry $2 million in liability insurance.",
+        "A purchase order is required above $2,000. Invoice matching is a three-way match. Standard vendor payment terms are net 30.",
+        "Employees may accept gifts valued up to $50. Cash gifts are prohibited. Gifts must be disclosed within 10 days."
+      ]
+    },
+    {
+      "filename": "product-roadmap.pdf",
+      "pages": [
+        "Product Roadmap. Features release every two weeks. A hotfix can ship on any day. Code freeze begins 3 days before a release.",
+        "Q1 delivers single sign-on for enterprise customers. Q2 delivers audit log exports. The beta program starts in March.",
+        "The beta program accepts 25 customers. Each beta customer receives a 30-day evaluation. Feedback surveys are sent within 7 days.",
+        "Deprecated features receive 90 days notice. API v1 sunsets on June 30. A migration guide is published with every deprecation.",
+        "Product accessibility targets WCAG 2.2 AA. Spanish and German localization ships in Q3. Telemetry collection is opt-in."
+      ]
+    },
+    {
+      "filename": "facilities-guide.pdf",
+      "pages": [
+        "Facilities Guide. The office is open from 7am to 7pm. Staff badges provide access 24/7. Visitors must sign in at reception.",
+        "Employee parking is on garage level 2. Parking costs $40 per month. Six EV chargers are available.",
+        "The emergency assembly point is the north lawn. Floor wardens guide evacuation. Fire drills occur every 6 months.",
+        "Conference rooms can be booked 30 days in advance. Reservations must be canceled 1 hour before use. Eight conference rooms are available.",
+        "Mailroom shipping cutoff is 2pm. Recycling bins are in every kitchen. Compost collection occurs on Fridays."
+      ]
+    },
+    {
+      "filename": "api-security-standard.pdf",
+      "pages": [
+        "API Security Standard. OAuth access tokens expire after 60 minutes. Refresh tokens expire after 30 days. Applications must use least-privilege scopes.",
+        "API keys are limited to 100 requests per minute. Burst traffic may reach 200 requests. A 429 response includes Retry-After 60 seconds.",
+        "API keys must be rotated every 90 days. A compromised key must be revoked within 24 hours. Two active keys are allowed during rotation.",
+        "All API connections require TLS 1.2 or higher. Payloads over 1 MB are rejected. JSON requests are validated against a schema.",
+        "Webhooks are signed with HMAC-SHA256. Failed webhooks are retried five times over 30 minutes. API audit logs are retained for 12 months."
       ]
     }
   ],
   "questions": [
     {
-      "id": "payment-terms",
-      "question": "What are the payment terms and what interest applies to late payments?",
-      "expected_document": "msa-agreement.pdf",
+      "id": "northwind-payment-term",
+      "question": "What payment term applies to Northwind invoices?",
+      "reference_answer": "Northwind invoices are due net 45 days from the invoice date.",
+      "expected_document": "northwind-vendor-agreement.pdf",
       "expected_page": 1,
       "answer_keywords": [
-        ["thirty days", "net thirty"],
-        ["one percent", "1 percent", "interest"]
+        [
+          "net 45 days",
+          "45 days"
+        ]
       ]
     },
     {
-      "id": "renewal-notice",
-      "question": "When does the agreement renew and how much notice is required?",
-      "expected_document": "msa-agreement.pdf",
+      "id": "northwind-late-fee",
+      "question": "What monthly fee applies to late Northwind balances?",
+      "reference_answer": "Late Northwind balances accrue a 1.5 percent monthly fee.",
+      "expected_document": "northwind-vendor-agreement.pdf",
+      "expected_page": 1,
+      "answer_keywords": [
+        [
+          "1.5 percent monthly fee",
+          "1.5 percent"
+        ]
+      ]
+    },
+    {
+      "id": "northwind-initial-term",
+      "question": "What is the initial term of the Northwind agreement?",
+      "reference_answer": "The initial term is 24 months.",
+      "expected_document": "northwind-vendor-agreement.pdf",
       "expected_page": 2,
       "answer_keywords": [
-        ["annually", "annual", "year"],
-        ["sixty days", "60 days"]
+        [
+          "24 months",
+          "twenty-four months"
+        ]
       ]
     },
     {
-      "id": "incident-reporting",
+      "id": "northwind-renewal-notice",
+      "question": "How much notice is required to stop Northwind renewal?",
+      "reference_answer": "Either party must give 90 days written notice before renewal.",
+      "expected_document": "northwind-vendor-agreement.pdf",
+      "expected_page": 2,
+      "answer_keywords": [
+        [
+          "90 days",
+          "ninety days"
+        ]
+      ]
+    },
+    {
+      "id": "northwind-termination-convenience",
+      "question": "How much notice is needed to terminate Northwind for convenience?",
+      "reference_answer": "Northwind may be terminated for convenience with 30 days written notice.",
+      "expected_document": "northwind-vendor-agreement.pdf",
+      "expected_page": 3,
+      "answer_keywords": [
+        [
+          "30 days",
+          "thirty days"
+        ]
+      ]
+    },
+    {
+      "id": "northwind-breach-cure",
+      "question": "What cure period applies to a Northwind material breach?",
+      "reference_answer": "A Northwind material breach requires a 15 day written cure period.",
+      "expected_document": "northwind-vendor-agreement.pdf",
+      "expected_page": 3,
+      "answer_keywords": [
+        [
+          "15 day",
+          "15 days",
+          "fifteen days"
+        ]
+      ]
+    },
+    {
+      "id": "northwind-confidentiality-survival",
+      "question": "How long do Northwind confidentiality obligations survive?",
+      "reference_answer": "Northwind confidentiality obligations survive for 5 years.",
+      "expected_document": "northwind-vendor-agreement.pdf",
+      "expected_page": 4,
+      "answer_keywords": [
+        [
+          "5 years",
+          "five years"
+        ]
+      ]
+    },
+    {
+      "id": "northwind-data-return",
+      "question": "When must Northwind return or destroy confidential data?",
+      "reference_answer": "Northwind must return or destroy confidential data within 30 days after termination.",
+      "expected_document": "northwind-vendor-agreement.pdf",
+      "expected_page": 4,
+      "answer_keywords": [
+        [
+          "within 30 days",
+          "30 days"
+        ]
+      ]
+    },
+    {
+      "id": "northwind-liability-cap",
+      "question": "What is the Northwind liability cap per claim?",
+      "reference_answer": "Northwind liability is capped at $500,000 per claim.",
+      "expected_document": "northwind-vendor-agreement.pdf",
+      "expected_page": 5,
+      "answer_keywords": [
+        [
+          "$500,000",
+          "500,000"
+        ]
+      ]
+    },
+    {
+      "id": "northwind-governing-law",
+      "question": "Which state's law governs the Northwind agreement?",
+      "reference_answer": "The Northwind agreement is governed by Delaware law.",
+      "expected_document": "northwind-vendor-agreement.pdf",
+      "expected_page": 5,
+      "answer_keywords": [
+        [
+          "Delaware law",
+          "Delaware"
+        ]
+      ]
+    },
+    {
+      "id": "security-mfa",
+      "question": "Which access requires multi-factor authentication?",
+      "reference_answer": "Production and administrative access requires multi-factor authentication.",
+      "expected_document": "information-security-policy.pdf",
+      "expected_page": 1,
+      "answer_keywords": [
+        [
+          "multi-factor authentication",
+          "MFA"
+        ]
+      ]
+    },
+    {
+      "id": "security-lockout",
+      "question": "After how many failed login attempts does an account lock?",
+      "reference_answer": "Accounts lock after five failed login attempts.",
+      "expected_document": "information-security-policy.pdf",
+      "expected_page": 1,
+      "answer_keywords": [
+        [
+          "five failed",
+          "5 failed"
+        ]
+      ]
+    },
+    {
+      "id": "security-encryption-at-rest",
+      "question": "What encryption algorithm protects data at rest?",
+      "reference_answer": "Data at rest is encrypted with AES-256.",
+      "expected_document": "information-security-policy.pdf",
+      "expected_page": 2,
+      "answer_keywords": [
+        [
+          "AES-256"
+        ]
+      ]
+    },
+    {
+      "id": "security-backup-retention",
+      "question": "How long are security backups retained?",
+      "reference_answer": "Security backups are retained for 35 days.",
+      "expected_document": "information-security-policy.pdf",
+      "expected_page": 2,
+      "answer_keywords": [
+        [
+          "35 days",
+          "thirty-five days"
+        ]
+      ]
+    },
+    {
+      "id": "security-incident-report",
       "question": "How quickly must a security incident be reported?",
-      "expected_document": "security-policy.pdf",
-      "expected_page": 2,
+      "reference_answer": "Security incidents must be reported within one hour.",
+      "expected_document": "information-security-policy.pdf",
+      "expected_page": 3,
       "answer_keywords": [
-        ["seventy-two hours", "72 hours"]
+        [
+          "one hour",
+          "1 hour"
+        ]
       ]
     },
     {
-      "id": "backup-retention",
-      "question": "How long are backups retained?",
-      "expected_document": "security-policy.pdf",
+      "id": "security-incident-postmortem",
+      "question": "When is a security incident postmortem due?",
+      "reference_answer": "A security incident postmortem is due within 5 business days.",
+      "expected_document": "information-security-policy.pdf",
+      "expected_page": 3,
+      "answer_keywords": [
+        [
+          "5 business days",
+          "five business days"
+        ]
+      ]
+    },
+    {
+      "id": "security-access-review",
+      "question": "How often are access reviews performed?",
+      "reference_answer": "Access reviews occur quarterly.",
+      "expected_document": "information-security-policy.pdf",
+      "expected_page": 4,
+      "answer_keywords": [
+        [
+          "quarterly"
+        ]
+      ]
+    },
+    {
+      "id": "security-termination-access",
+      "question": "When is access removed for terminated employees?",
+      "reference_answer": "Access for terminated employees is removed within 24 hours.",
+      "expected_document": "information-security-policy.pdf",
+      "expected_page": 4,
+      "answer_keywords": [
+        [
+          "24 hours",
+          "within 24 hours"
+        ]
+      ]
+    },
+    {
+      "id": "security-log-retention",
+      "question": "How long are security logs retained?",
+      "reference_answer": "Security logs are retained for 12 months.",
+      "expected_document": "information-security-policy.pdf",
+      "expected_page": 5,
+      "answer_keywords": [
+        [
+          "12 months",
+          "twelve months"
+        ]
+      ]
+    },
+    {
+      "id": "security-critical-patch",
+      "question": "What is the patch deadline for critical vulnerabilities?",
+      "reference_answer": "Critical vulnerabilities must be patched within 7 days.",
+      "expected_document": "information-security-policy.pdf",
+      "expected_page": 5,
+      "answer_keywords": [
+        [
+          "7 days",
+          "seven days"
+        ]
+      ]
+    },
+    {
+      "id": "handbook-pto",
+      "question": "How many PTO days do full-time employees receive each year?",
+      "reference_answer": "Full-time employees receive 20 days of paid time off each year.",
+      "expected_document": "employee-handbook.pdf",
       "expected_page": 1,
       "answer_keywords": [
-        ["thirty-five days", "35 days"]
+        [
+          "20 days",
+          "twenty days"
+        ]
+      ]
+    },
+    {
+      "id": "handbook-carryover",
+      "question": "How many unused PTO days may employees carry over?",
+      "reference_answer": "Employees may carry over 5 unused PTO days.",
+      "expected_document": "employee-handbook.pdf",
+      "expected_page": 1,
+      "answer_keywords": [
+        [
+          "5 unused PTO days",
+          "5 days"
+        ]
+      ]
+    },
+    {
+      "id": "handbook-remote",
+      "question": "How many remote days per week are allowed?",
+      "reference_answer": "Employees may work remotely 3 days per week.",
+      "expected_document": "employee-handbook.pdf",
+      "expected_page": 2,
+      "answer_keywords": [
+        [
+          "3 days per week",
+          "three days per week"
+        ]
+      ]
+    },
+    {
+      "id": "handbook-core-hours",
+      "question": "What are the core collaboration hours?",
+      "reference_answer": "Core collaboration hours are 10am to 3pm local time.",
+      "expected_document": "employee-handbook.pdf",
+      "expected_page": 2,
+      "answer_keywords": [
+        [
+          "10am to 3pm",
+          "10 a.m. to 3 p.m."
+        ]
+      ]
+    },
+    {
+      "id": "handbook-expense-deadline",
+      "question": "When are expense reports due?",
+      "reference_answer": "Expense reports are due within 30 days of purchase.",
+      "expected_document": "employee-handbook.pdf",
+      "expected_page": 3,
+      "answer_keywords": [
+        [
+          "within 30 days",
+          "30 days"
+        ]
+      ]
+    },
+    {
+      "id": "handbook-receipt-threshold",
+      "question": "When is an itemized receipt required?",
+      "reference_answer": "Itemized receipts are required for expenses over $25.",
+      "expected_document": "employee-handbook.pdf",
+      "expected_page": 3,
+      "answer_keywords": [
+        [
+          "over $25",
+          "over 25"
+        ]
+      ]
+    },
+    {
+      "id": "handbook-parental",
+      "question": "How much paid parental leave is provided?",
+      "reference_answer": "Parental leave provides 16 weeks of paid leave.",
+      "expected_document": "employee-handbook.pdf",
+      "expected_page": 4,
+      "answer_keywords": [
+        [
+          "16 weeks",
+          "sixteen weeks"
+        ]
+      ]
+    },
+    {
+      "id": "handbook-sick",
+      "question": "How many paid sick days do employees receive each year?",
+      "reference_answer": "Employees receive 10 days of paid sick leave each year.",
+      "expected_document": "employee-handbook.pdf",
+      "expected_page": 4,
+      "answer_keywords": [
+        [
+          "10 days",
+          "ten days"
+        ]
+      ]
+    },
+    {
+      "id": "handbook-harassment-report",
+      "question": "Where can employees report harassment?",
+      "reference_answer": "Harassment can be reported to HR or the ethics hotline.",
+      "expected_document": "employee-handbook.pdf",
+      "expected_page": 5,
+      "answer_keywords": [
+        [
+          "HR"
+        ],
+        [
+          "ethics hotline"
+        ]
+      ]
+    },
+    {
+      "id": "handbook-harassment-ack",
+      "question": "When does HR acknowledge a harassment report?",
+      "reference_answer": "HR acknowledges harassment reports within 2 business days.",
+      "expected_document": "employee-handbook.pdf",
+      "expected_page": 5,
+      "answer_keywords": [
+        [
+          "2 business days",
+          "two business days"
+        ]
+      ]
+    },
+    {
+      "id": "retention-customer-retention",
+      "question": "How long are customer records retained after contract end?",
+      "reference_answer": "Customer records are retained for 7 years after contract end.",
+      "expected_document": "data-retention-policy.pdf",
+      "expected_page": 1,
+      "answer_keywords": [
+        [
+          "7 years",
+          "seven years"
+        ]
+      ]
+    },
+    {
+      "id": "retention-deletion-request",
+      "question": "When are customer deletion requests completed?",
+      "reference_answer": "Customer deletion requests are completed within 30 days unless a legal hold applies.",
+      "expected_document": "data-retention-policy.pdf",
+      "expected_page": 1,
+      "answer_keywords": [
+        [
+          "within 30 days",
+          "30 days"
+        ]
+      ]
+    },
+    {
+      "id": "retention-employee-retention",
+      "question": "How long are employee records retained after departure?",
+      "reference_answer": "Employee records are retained for 6 years after departure.",
+      "expected_document": "data-retention-policy.pdf",
+      "expected_page": 2,
+      "answer_keywords": [
+        [
+          "6 years",
+          "six years"
+        ]
+      ]
+    },
+    {
+      "id": "retention-payroll-retention",
+      "question": "How long are payroll records retained?",
+      "reference_answer": "Payroll records are retained for 7 years.",
+      "expected_document": "data-retention-policy.pdf",
+      "expected_page": 2,
+      "answer_keywords": [
+        [
+          "7 years",
+          "seven years"
+        ]
+      ]
+    },
+    {
+      "id": "retention-audit-log",
+      "question": "How long are audit logs retained?",
+      "reference_answer": "Audit logs are retained for 13 months.",
+      "expected_document": "data-retention-policy.pdf",
+      "expected_page": 3,
+      "answer_keywords": [
+        [
+          "13 months",
+          "thirteen months"
+        ]
+      ]
+    },
+    {
+      "id": "retention-security-log",
+      "question": "How long are security logs retained under the data retention policy?",
+      "reference_answer": "Security logs are retained for 18 months.",
+      "expected_document": "data-retention-policy.pdf",
+      "expected_page": 3,
+      "answer_keywords": [
+        [
+          "18 months",
+          "eighteen months"
+        ]
+      ]
+    },
+    {
+      "id": "retention-legal-hold",
+      "question": "What does a legal hold do to deletion activity?",
+      "reference_answer": "A legal hold suspends all deletion activity.",
+      "expected_document": "data-retention-policy.pdf",
+      "expected_page": 4,
+      "answer_keywords": [
+        [
+          "suspends deletion",
+          "suspends all deletion"
+        ]
+      ]
+    },
+    {
+      "id": "retention-legal-notify",
+      "question": "When must legal be notified of a legal hold?",
+      "reference_answer": "Legal must be notified within 2 business days.",
+      "expected_document": "data-retention-policy.pdf",
+      "expected_page": 4,
+      "answer_keywords": [
+        [
+          "2 business days",
+          "two business days"
+        ]
+      ]
+    },
+    {
+      "id": "retention-backup-retention",
+      "question": "How long are data retention backup copies kept?",
+      "reference_answer": "Data retention backup copies are kept for 45 days.",
+      "expected_document": "data-retention-policy.pdf",
+      "expected_page": 5,
+      "answer_keywords": [
+        [
+          "45 days",
+          "forty-five days"
+        ]
+      ]
+    },
+    {
+      "id": "retention-backup-purge",
+      "question": "When is deleted data purged from backups?",
+      "reference_answer": "Deleted data is purged from backups within 60 days.",
+      "expected_document": "data-retention-policy.pdf",
+      "expected_page": 5,
+      "answer_keywords": [
+        [
+          "within 60 days",
+          "60 days"
+        ]
+      ]
+    },
+    {
+      "id": "cloud-regions",
+      "question": "Which region is the cloud disaster recovery region?",
+      "reference_answer": "The cloud disaster recovery region is eu-west-1.",
+      "expected_document": "cloud-architecture-standard.pdf",
+      "expected_page": 1,
+      "answer_keywords": [
+        [
+          "eu-west-1"
+        ]
+      ]
+    },
+    {
+      "id": "cloud-rto",
+      "question": "What is the cloud recovery time objective?",
+      "reference_answer": "The cloud recovery time objective is 4 hours.",
+      "expected_document": "cloud-architecture-standard.pdf",
+      "expected_page": 1,
+      "answer_keywords": [
+        [
+          "4 hours",
+          "four hours"
+        ]
+      ]
+    },
+    {
+      "id": "cloud-cpu-target",
+      "question": "What CPU utilization does autoscaling target?",
+      "reference_answer": "Autoscaling targets 65 percent CPU utilization.",
+      "expected_document": "cloud-architecture-standard.pdf",
+      "expected_page": 2,
+      "answer_keywords": [
+        [
+          "65 percent",
+          "65%"
+        ]
+      ]
+    },
+    {
+      "id": "cloud-max-instances",
+      "question": "What is the maximum number of instances per service?",
+      "reference_answer": "Each service runs up to 30 instances.",
+      "expected_document": "cloud-architecture-standard.pdf",
+      "expected_page": 2,
+      "answer_keywords": [
+        [
+          "30 instances",
+          "thirty instances"
+        ]
+      ]
+    },
+    {
+      "id": "cloud-metrics-interval",
+      "question": "How often does Prometheus collect cloud metrics?",
+      "reference_answer": "Prometheus collects metrics every 15 seconds.",
+      "expected_document": "cloud-architecture-standard.pdf",
+      "expected_page": 3,
+      "answer_keywords": [
+        [
+          "15 seconds",
+          "every 15 seconds"
+        ]
+      ]
+    },
+    {
+      "id": "cloud-alert-threshold",
+      "question": "When does the 5xx alert page the on-call engineer?",
+      "reference_answer": "Alerts page when the 5xx rate exceeds 2 percent for 5 minutes.",
+      "expected_document": "cloud-architecture-standard.pdf",
+      "expected_page": 3,
+      "answer_keywords": [
+        [
+          "2 percent"
+        ],
+        [
+          "5 minutes"
+        ]
+      ]
+    },
+    {
+      "id": "cloud-deploy-window",
+      "question": "When are production deployments allowed?",
+      "reference_answer": "Production deployments occur Tuesday and Thursday from 9am to 11am ET.",
+      "expected_document": "cloud-architecture-standard.pdf",
+      "expected_page": 4,
+      "answer_keywords": [
+        [
+          "Tuesday and Thursday"
+        ],
+        [
+          "9am to 11am"
+        ]
+      ]
+    },
+    {
+      "id": "cloud-canary",
+      "question": "What percentage of traffic does the production canary receive?",
+      "reference_answer": "The production canary receives 10 percent of traffic.",
+      "expected_document": "cloud-architecture-standard.pdf",
+      "expected_page": 4,
+      "answer_keywords": [
+        [
+          "10 percent",
+          "10%"
+        ]
+      ]
+    },
+    {
+      "id": "cloud-read-replica",
+      "question": "Which region hosts the PostgreSQL read replica?",
+      "reference_answer": "The PostgreSQL read replica is in ca-central-1.",
+      "expected_document": "cloud-architecture-standard.pdf",
+      "expected_page": 5,
+      "answer_keywords": [
+        [
+          "ca-central-1"
+        ]
+      ]
+    },
+    {
+      "id": "cloud-cdn-ttl",
+      "question": "How long does CloudFront cache content?",
+      "reference_answer": "CloudFront caches content for 300 seconds.",
+      "expected_document": "cloud-architecture-standard.pdf",
+      "expected_page": 5,
+      "answer_keywords": [
+        [
+          "300 seconds",
+          "five minutes"
+        ]
+      ]
+    },
+    {
+      "id": "support-p1-response",
+      "question": "What is the first response target for a P1 support ticket?",
+      "reference_answer": "P1 tickets require a first response within 15 minutes.",
+      "expected_document": "customer-support-playbook.pdf",
+      "expected_page": 1,
+      "answer_keywords": [
+        [
+          "15 minutes",
+          "fifteen minutes"
+        ]
+      ]
+    },
+    {
+      "id": "support-p3-response",
+      "question": "What is the first response target for a P3 support ticket?",
+      "reference_answer": "P3 tickets require a response within 4 hours.",
+      "expected_document": "customer-support-playbook.pdf",
+      "expected_page": 1,
+      "answer_keywords": [
+        [
+          "4 hours",
+          "four hours"
+        ]
+      ]
+    },
+    {
+      "id": "support-p1-definition",
+      "question": "What counts as a P1 support incident?",
+      "reference_answer": "A P1 incident is a complete outage affecting all users.",
+      "expected_document": "customer-support-playbook.pdf",
+      "expected_page": 2,
+      "answer_keywords": [
+        [
+          "complete outage"
+        ],
+        [
+          "all users"
+        ]
+      ]
+    },
+    {
+      "id": "support-p2-definition",
+      "question": "What counts as a P2 support incident?",
+      "reference_answer": "A P2 incident is a major feature that is degraded.",
+      "expected_document": "customer-support-playbook.pdf",
+      "expected_page": 2,
+      "answer_keywords": [
+        [
+          "major feature"
+        ],
+        [
+          "degraded"
+        ]
+      ]
+    },
+    {
+      "id": "support-first-escalation",
+      "question": "When is a support issue escalated to the support lead?",
+      "reference_answer": "Escalate to the support lead after 30 minutes without a response.",
+      "expected_document": "customer-support-playbook.pdf",
+      "expected_page": 3,
+      "answer_keywords": [
+        [
+          "after 30 minutes",
+          "30 minutes"
+        ]
+      ]
+    },
+    {
+      "id": "support-incident-commander",
+      "question": "When does the incident commander join a support issue?",
+      "reference_answer": "The incident commander joins after 60 minutes.",
+      "expected_document": "customer-support-playbook.pdf",
+      "expected_page": 3,
+      "answer_keywords": [
+        [
+          "after 60 minutes",
+          "60 minutes"
+        ]
+      ]
+    },
+    {
+      "id": "support-refund-window",
+      "question": "How long do customers have to request a refund?",
+      "reference_answer": "Customers may request a refund within 14 days of purchase.",
+      "expected_document": "customer-support-playbook.pdf",
+      "expected_page": 4,
+      "answer_keywords": [
+        [
+          "14 days",
+          "fourteen days"
+        ]
+      ]
+    },
+    {
+      "id": "support-refund-approval",
+      "question": "When is manager approval required for a refund?",
+      "reference_answer": "Manager approval is required for refunds over $500.",
+      "expected_document": "customer-support-playbook.pdf",
+      "expected_page": 4,
+      "answer_keywords": [
+        [
+          "over $500",
+          "$500"
+        ]
+      ]
+    },
+    {
+      "id": "support-status-page",
+      "question": "When is the public status page updated after an outage?",
+      "reference_answer": "The public status page is updated within 30 minutes of a customer outage.",
+      "expected_document": "customer-support-playbook.pdf",
+      "expected_page": 5,
+      "answer_keywords": [
+        [
+          "within 30 minutes",
+          "30 minutes"
+        ]
+      ]
+    },
+    {
+      "id": "support-support-postmortem",
+      "question": "When is a customer-outage postmortem published?",
+      "reference_answer": "A customer-outage postmortem is published within 3 business days.",
+      "expected_document": "customer-support-playbook.pdf",
+      "expected_page": 5,
+      "answer_keywords": [
+        [
+          "3 business days",
+          "three business days"
+        ]
+      ]
+    },
+    {
+      "id": "procurement-under-5k",
+      "question": "Who approves a purchase under $5,000?",
+      "reference_answer": "Purchases under $5,000 require manager approval.",
+      "expected_document": "procurement-policy.pdf",
+      "expected_page": 1,
+      "answer_keywords": [
+        [
+          "manager",
+          "manager approval"
+        ]
+      ]
+    },
+    {
+      "id": "procurement-over-50k",
+      "question": "Who approves a purchase over $50,000?",
+      "reference_answer": "Purchases over $50,000 require VP and finance approval.",
+      "expected_document": "procurement-policy.pdf",
+      "expected_page": 1,
+      "answer_keywords": [
+        [
+          "VP and finance"
+        ]
+      ]
+    },
+    {
+      "id": "procurement-quotes-over-25k",
+      "question": "How many written quotes are required above $25,000?",
+      "reference_answer": "Three written quotes are required above $25,000.",
+      "expected_document": "procurement-policy.pdf",
+      "expected_page": 2,
+      "answer_keywords": [
+        [
+          "three written quotes",
+          "three quotes"
+        ]
+      ]
+    },
+    {
+      "id": "procurement-sole-source",
+      "question": "What is required for a sole-source procurement?",
+      "reference_answer": "A sole-source purchase requires a CFO waiver.",
+      "expected_document": "procurement-policy.pdf",
+      "expected_page": 2,
+      "answer_keywords": [
+        [
+          "CFO waiver",
+          "CFO"
+        ]
+      ]
+    },
+    {
+      "id": "procurement-vendor-security-review",
+      "question": "How long does a vendor security review take?",
+      "reference_answer": "Vendor security reviews take 10 business days.",
+      "expected_document": "procurement-policy.pdf",
+      "expected_page": 3,
+      "answer_keywords": [
+        [
+          "10 business days",
+          "ten business days"
+        ]
+      ]
+    },
+    {
+      "id": "procurement-vendor-insurance",
+      "question": "How much liability insurance must vendors carry?",
+      "reference_answer": "Vendors must carry $2 million in liability insurance.",
+      "expected_document": "procurement-policy.pdf",
+      "expected_page": 3,
+      "answer_keywords": [
+        [
+          "$2 million",
+          "2 million"
+        ]
+      ]
+    },
+    {
+      "id": "procurement-po-threshold",
+      "question": "When is a purchase order required?",
+      "reference_answer": "A purchase order is required above $2,000.",
+      "expected_document": "procurement-policy.pdf",
+      "expected_page": 4,
+      "answer_keywords": [
+        [
+          "above $2,000",
+          "over $2,000"
+        ]
+      ]
+    },
+    {
+      "id": "procurement-payment-terms",
+      "question": "What are the standard vendor payment terms?",
+      "reference_answer": "Standard vendor payment terms are net 30.",
+      "expected_document": "procurement-policy.pdf",
+      "expected_page": 4,
+      "answer_keywords": [
+        [
+          "net 30",
+          "net thirty"
+        ]
+      ]
+    },
+    {
+      "id": "procurement-gift-limit",
+      "question": "What is the employee gift value limit?",
+      "reference_answer": "Employees may accept gifts valued up to $50.",
+      "expected_document": "procurement-policy.pdf",
+      "expected_page": 5,
+      "answer_keywords": [
+        [
+          "$50",
+          "50"
+        ]
+      ]
+    },
+    {
+      "id": "procurement-cash-gifts",
+      "question": "What is the policy on cash gifts?",
+      "reference_answer": "Cash gifts are prohibited.",
+      "expected_document": "procurement-policy.pdf",
+      "expected_page": 5,
+      "answer_keywords": [
+        [
+          "cash gifts are prohibited",
+          "no cash gifts"
+        ]
+      ]
+    },
+    {
+      "id": "roadmap-release-cadence",
+      "question": "How often are product features released?",
+      "reference_answer": "Product features release every two weeks.",
+      "expected_document": "product-roadmap.pdf",
+      "expected_page": 1,
+      "answer_keywords": [
+        [
+          "every two weeks",
+          "2 weeks"
+        ]
+      ]
+    },
+    {
+      "id": "roadmap-code-freeze",
+      "question": "When does code freeze begin before a release?",
+      "reference_answer": "Code freeze begins 3 days before a release.",
+      "expected_document": "product-roadmap.pdf",
+      "expected_page": 1,
+      "answer_keywords": [
+        [
+          "3 days",
+          "three days"
+        ]
+      ]
+    },
+    {
+      "id": "roadmap-q1-feature",
+      "question": "What feature is delivered in Q1?",
+      "reference_answer": "Q1 delivers single sign-on for enterprise customers.",
+      "expected_document": "product-roadmap.pdf",
+      "expected_page": 2,
+      "answer_keywords": [
+        [
+          "single sign-on",
+          "SSO"
+        ]
+      ]
+    },
+    {
+      "id": "roadmap-q2-feature",
+      "question": "What feature is delivered in Q2?",
+      "reference_answer": "Q2 delivers audit log exports.",
+      "expected_document": "product-roadmap.pdf",
+      "expected_page": 2,
+      "answer_keywords": [
+        [
+          "audit log exports",
+          "audit exports"
+        ]
+      ]
+    },
+    {
+      "id": "roadmap-beta-size",
+      "question": "How many customers does the beta program accept?",
+      "reference_answer": "The beta program accepts 25 customers.",
+      "expected_document": "product-roadmap.pdf",
+      "expected_page": 3,
+      "answer_keywords": [
+        [
+          "25 customers",
+          "twenty-five customers"
+        ]
+      ]
+    },
+    {
+      "id": "roadmap-beta-duration",
+      "question": "How long is each beta customer evaluation?",
+      "reference_answer": "Each beta customer receives a 30-day evaluation.",
+      "expected_document": "product-roadmap.pdf",
+      "expected_page": 3,
+      "answer_keywords": [
+        [
+          "30-day",
+          "30 days"
+        ]
+      ]
+    },
+    {
+      "id": "roadmap-deprecation-notice",
+      "question": "How much notice is required before a feature deprecation?",
+      "reference_answer": "Deprecated features receive 90 days notice.",
+      "expected_document": "product-roadmap.pdf",
+      "expected_page": 4,
+      "answer_keywords": [
+        [
+          "90 days",
+          "ninety days"
+        ]
+      ]
+    },
+    {
+      "id": "roadmap-api-sunset",
+      "question": "When does API v1 sunset?",
+      "reference_answer": "API v1 sunsets on June 30.",
+      "expected_document": "product-roadmap.pdf",
+      "expected_page": 4,
+      "answer_keywords": [
+        [
+          "June 30"
+        ]
+      ]
+    },
+    {
+      "id": "roadmap-accessibility",
+      "question": "What accessibility standard is the product target?",
+      "reference_answer": "Product accessibility targets WCAG 2.2 AA.",
+      "expected_document": "product-roadmap.pdf",
+      "expected_page": 5,
+      "answer_keywords": [
+        [
+          "WCAG 2.2 AA",
+          "WCAG 2.2"
+        ]
+      ]
+    },
+    {
+      "id": "roadmap-languages",
+      "question": "Which languages ship in Q3?",
+      "reference_answer": "Spanish and German localization ships in Q3.",
+      "expected_document": "product-roadmap.pdf",
+      "expected_page": 5,
+      "answer_keywords": [
+        [
+          "Spanish"
+        ],
+        [
+          "German"
+        ]
+      ]
+    },
+    {
+      "id": "facilities-office-hours",
+      "question": "What are the office opening hours?",
+      "reference_answer": "The office is open from 7am to 7pm.",
+      "expected_document": "facilities-guide.pdf",
+      "expected_page": 1,
+      "answer_keywords": [
+        [
+          "7am to 7pm",
+          "7am-7pm"
+        ]
+      ]
+    },
+    {
+      "id": "facilities-visitor",
+      "question": "What must office visitors do?",
+      "reference_answer": "Office visitors must sign in at reception.",
+      "expected_document": "facilities-guide.pdf",
+      "expected_page": 1,
+      "answer_keywords": [
+        [
+          "sign in at reception",
+          "sign in"
+        ]
+      ]
+    },
+    {
+      "id": "facilities-parking-level",
+      "question": "Where is employee parking located?",
+      "reference_answer": "Employee parking is on garage level 2.",
+      "expected_document": "facilities-guide.pdf",
+      "expected_page": 2,
+      "answer_keywords": [
+        [
+          "level 2"
+        ]
+      ]
+    },
+    {
+      "id": "facilities-parking-cost",
+      "question": "How much does employee parking cost?",
+      "reference_answer": "Employee parking costs $40 per month.",
+      "expected_document": "facilities-guide.pdf",
+      "expected_page": 2,
+      "answer_keywords": [
+        [
+          "$40 per month",
+          "40 per month"
+        ]
+      ]
+    },
+    {
+      "id": "facilities-assembly",
+      "question": "Where is the emergency assembly point?",
+      "reference_answer": "The emergency assembly point is the north lawn.",
+      "expected_document": "facilities-guide.pdf",
+      "expected_page": 3,
+      "answer_keywords": [
+        [
+          "north lawn"
+        ]
+      ]
+    },
+    {
+      "id": "facilities-drill",
+      "question": "How often are fire drills held?",
+      "reference_answer": "Fire drills occur every 6 months.",
+      "expected_document": "facilities-guide.pdf",
+      "expected_page": 3,
+      "answer_keywords": [
+        [
+          "every 6 months",
+          "6 months"
+        ]
+      ]
+    },
+    {
+      "id": "facilities-room-booking",
+      "question": "How far in advance can conference rooms be booked?",
+      "reference_answer": "Conference rooms can be booked 30 days in advance.",
+      "expected_document": "facilities-guide.pdf",
+      "expected_page": 4,
+      "answer_keywords": [
+        [
+          "30 days",
+          "thirty days"
+        ]
+      ]
+    },
+    {
+      "id": "facilities-room-cancel",
+      "question": "When must a conference room reservation be canceled?",
+      "reference_answer": "Reservations must be canceled 1 hour before use.",
+      "expected_document": "facilities-guide.pdf",
+      "expected_page": 4,
+      "answer_keywords": [
+        [
+          "1 hour",
+          "one hour"
+        ]
+      ]
+    },
+    {
+      "id": "facilities-mail-cutoff",
+      "question": "What is the mailroom shipping cutoff?",
+      "reference_answer": "The mailroom shipping cutoff is 2pm.",
+      "expected_document": "facilities-guide.pdf",
+      "expected_page": 5,
+      "answer_keywords": [
+        [
+          "2pm",
+          "2 pm"
+        ]
+      ]
+    },
+    {
+      "id": "facilities-recycling",
+      "question": "Where are recycling bins located?",
+      "reference_answer": "Recycling bins are in every kitchen.",
+      "expected_document": "facilities-guide.pdf",
+      "expected_page": 5,
+      "answer_keywords": [
+        [
+          "every kitchen",
+          "kitchen"
+        ]
+      ]
+    },
+    {
+      "id": "api-access-token",
+      "question": "When do OAuth access tokens expire?",
+      "reference_answer": "OAuth access tokens expire after 60 minutes.",
+      "expected_document": "api-security-standard.pdf",
+      "expected_page": 1,
+      "answer_keywords": [
+        [
+          "60 minutes",
+          "one hour"
+        ]
+      ]
+    },
+    {
+      "id": "api-refresh-token",
+      "question": "When do OAuth refresh tokens expire?",
+      "reference_answer": "OAuth refresh tokens expire after 30 days.",
+      "expected_document": "api-security-standard.pdf",
+      "expected_page": 1,
+      "answer_keywords": [
+        [
+          "30 days",
+          "thirty days"
+        ]
+      ]
+    },
+    {
+      "id": "api-rate-limit",
+      "question": "What is the API rate limit per key?",
+      "reference_answer": "API keys are limited to 100 requests per minute.",
+      "expected_document": "api-security-standard.pdf",
+      "expected_page": 2,
+      "answer_keywords": [
+        [
+          "100 requests per minute",
+          "100 requests"
+        ]
+      ]
+    },
+    {
+      "id": "api-retry-after",
+      "question": "What Retry-After value is returned in a 429 response?",
+      "reference_answer": "A 429 response includes Retry-After 60 seconds.",
+      "expected_document": "api-security-standard.pdf",
+      "expected_page": 2,
+      "answer_keywords": [
+        [
+          "Retry-After 60",
+          "60 seconds"
+        ]
+      ]
+    },
+    {
+      "id": "api-key-rotation",
+      "question": "How often must API keys be rotated?",
+      "reference_answer": "API keys must be rotated every 90 days.",
+      "expected_document": "api-security-standard.pdf",
+      "expected_page": 3,
+      "answer_keywords": [
+        [
+          "90 days",
+          "every 90 days"
+        ]
+      ]
+    },
+    {
+      "id": "api-key-compromise",
+      "question": "When must a compromised API key be revoked?",
+      "reference_answer": "A compromised API key must be revoked within 24 hours.",
+      "expected_document": "api-security-standard.pdf",
+      "expected_page": 3,
+      "answer_keywords": [
+        [
+          "24 hours",
+          "within 24 hours"
+        ]
+      ]
+    },
+    {
+      "id": "api-tls",
+      "question": "What is the minimum TLS version for API connections?",
+      "reference_answer": "All API connections require TLS 1.2 or higher.",
+      "expected_document": "api-security-standard.pdf",
+      "expected_page": 4,
+      "answer_keywords": [
+        [
+          "TLS 1.2"
+        ]
+      ]
+    },
+    {
+      "id": "api-payload-size",
+      "question": "What is the maximum API payload size?",
+      "reference_answer": "Payloads over 1 MB are rejected.",
+      "expected_document": "api-security-standard.pdf",
+      "expected_page": 4,
+      "answer_keywords": [
+        [
+          "1 MB",
+          "one megabyte"
+        ]
+      ]
+    },
+    {
+      "id": "api-webhook-signing",
+      "question": "How are API webhooks signed?",
+      "reference_answer": "API webhooks are signed with HMAC-SHA256.",
+      "expected_document": "api-security-standard.pdf",
+      "expected_page": 5,
+      "answer_keywords": [
+        [
+          "HMAC-SHA256",
+          "HMAC"
+        ]
+      ]
+    },
+    {
+      "id": "api-webhook-retry",
+      "question": "How many times are failed webhooks retried?",
+      "reference_answer": "Failed webhooks are retried five times over 30 minutes.",
+      "expected_document": "api-security-standard.pdf",
+      "expected_page": 5,
+      "answer_keywords": [
+        [
+          "five times",
+          "5 times"
+        ]
       ]
     },
     {
       "id": "unanswerable-ticker",
       "question": "What is the company stock ticker symbol?",
+      "reference_answer": "",
+      "expected_document": null,
+      "expected_page": null,
+      "answer_keywords": [],
+      "should_refuse": true
+    },
+    {
+      "id": "unanswerable-ceo-color",
+      "question": "What is the CEO's favorite color?",
+      "reference_answer": "",
+      "expected_document": null,
+      "expected_page": null,
+      "answer_keywords": [],
+      "should_refuse": true
+    },
+    {
+      "id": "unanswerable-office-dog",
+      "question": "What is the name of the office dog?",
+      "reference_answer": "",
+      "expected_document": null,
+      "expected_page": null,
+      "answer_keywords": [],
+      "should_refuse": true
+    },
+    {
+      "id": "unanswerable-revenue-2029",
+      "question": "What revenue is projected for 2029?",
+      "reference_answer": "",
+      "expected_document": null,
+      "expected_page": null,
+      "answer_keywords": [],
+      "should_refuse": true
+    },
+    {
+      "id": "unanswerable-mars-office",
+      "question": "What is the address of the Mars office?",
+      "reference_answer": "",
+      "expected_document": null,
+      "expected_page": null,
+      "answer_keywords": [],
+      "should_refuse": true
+    },
+    {
+      "id": "unanswerable-employee-count",
+      "question": "How many employees work at the company?",
+      "reference_answer": "",
+      "expected_document": null,
+      "expected_page": null,
+      "answer_keywords": [],
+      "should_refuse": true
+    },
+    {
+      "id": "unanswerable-secret-codename",
+      "question": "What is the secret project codename?",
+      "reference_answer": "",
+      "expected_document": null,
+      "expected_page": null,
+      "answer_keywords": [],
+      "should_refuse": true
+    },
+    {
+      "id": "unanswerable-cafeteria-menu",
+      "question": "What is on the cafeteria menu today?",
+      "reference_answer": "",
+      "expected_document": null,
+      "expected_page": null,
+      "answer_keywords": [],
+      "should_refuse": true
+    },
+    {
+      "id": "unanswerable-founder-phone",
+      "question": "What is the founder's phone number?",
+      "reference_answer": "",
+      "expected_document": null,
+      "expected_page": null,
+      "answer_keywords": [],
+      "should_refuse": true
+    },
+    {
+      "id": "unanswerable-ceo-home",
+      "question": "What is the CEO's home address?",
+      "reference_answer": "",
       "expected_document": null,
       "expected_page": null,
       "answer_keywords": [],

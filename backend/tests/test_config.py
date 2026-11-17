@@ -18,10 +18,48 @@ def make_settings(**overrides: object) -> Settings:
 
 
 def test_empty_optional_values_are_normalized() -> None:
-    settings = make_settings(openai_base_url="", cookie_domain="")
+    settings = make_settings(
+        openai_base_url="",
+        cookie_domain="",
+        s3_bucket="",
+        s3_endpoint_url="",
+        s3_access_key_id="",
+        s3_secret_access_key="",
+    )
 
     assert settings.openai_base_url is None
     assert settings.cookie_domain is None
+    assert settings.s3_bucket is None
+    assert settings.s3_endpoint_url is None
+    assert settings.s3_access_key_id is None
+    assert settings.s3_secret_access_key is None
+
+
+def test_s3_backend_requires_a_bucket() -> None:
+    with pytest.raises(ValidationError, match="S3_BUCKET is required"):
+        make_settings(storage_backend="s3", s3_bucket=None)
+
+
+def test_s3_credentials_must_be_set_together() -> None:
+    with pytest.raises(ValidationError, match="must be set together"):
+        make_settings(
+            storage_backend="s3",
+            s3_bucket="documents",
+            s3_access_key_id="access-key",
+        )
+
+
+def test_s3_settings_are_loaded_when_configured() -> None:
+    settings = make_settings(
+        storage_backend="s3",
+        s3_bucket="documents",
+        s3_access_key_id="access-key",
+        s3_secret_access_key="secret-key",
+    )
+
+    assert settings.storage_backend == "s3"
+    assert settings.s3_bucket == "documents"
+    assert settings.s3_secret_key == "secret-key"
 
 
 def test_wildcard_cors_origins_are_rejected() -> None:

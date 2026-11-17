@@ -5,16 +5,28 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Request, Response, status
 
 from app.api.cookies import clear_auth_cookies, set_auth_cookies
-from app.api.deps import CurrentUser, SettingsDep, get_auth_service, request_metadata
+from app.api.deps import (
+    CurrentUser,
+    SettingsDep,
+    get_account_service,
+    get_auth_service,
+    request_metadata,
+)
 from app.core.rate_limit import rate_limit
 from app.schemas.auth import (
+    AccountActionResponse,
     AuthResponse,
     ChangePasswordRequest,
+    DeleteAccountRequest,
     LoginRequest,
+    PasswordResetConfirmRequest,
+    PasswordResetRequest,
     RegisterRequest,
     UpdateProfileRequest,
     UserResponse,
+    VerifyEmailRequest,
 )
+from app.services.account import AccountService
 from app.services.auth import AuthService
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -36,6 +48,7 @@ async def register(
     response: Response,
     settings: SettingsDep,
     service: Annotated[AuthService, Depends(get_auth_service)],
+    accounts: Annotated[AccountService, Depends(get_account_service)],
 ) -> AuthResponse:
     user_agent, ip_address = request_metadata(request)
     tokens = await service.register(
@@ -45,6 +58,7 @@ async def register(
         user_agent=user_agent,
         ip_address=ip_address,
     )
+    await accounts.send_verification(tokens.user)
     set_auth_cookies(response, tokens, settings)
     return _auth_response(tokens.user)
 
@@ -143,3 +157,77 @@ async def change_password(
     )
     set_auth_cookies(response, tokens, settings)
     return _auth_response(tokens.user)
+
+
+@router.post(
+    "/verify-email",
+    response_model=AccountActionResponse,
+    dependencies=[Depends(rate_limit("auth-verify-email", "auth_rate_limit_per_minute"))],
+)
+async def verify_email(
+    payload: VerifyEmailRequest,
+    accounts: Annotated[AccountService, Depends(get_account_service)],
+) -> AccountActionResponse:
+    await accounts.verify_email(payload.token)
+    return AccountActionResponse(message="Email verified")
+
+
+@router.post(
+    "/resend-verification",
+    response_model=AccountActionResponse,
+    dependencies=[Depends(rate_limit("auth-resend-verification", "auth_rate_limit_per_minute"))],
+)
+async def resend_verification(
+    current_user: CurrentUser,
+    accounts: Annotated[AccountService, Depends(get_account_service)],
+) -> AccountActionResponse:
+    await accounts.send_verification(current_user)
+    return AccountActionResponse(
+        message="If verification is needed, a new message has been sent."
+    )
+
+
+@router.post(
+    "/password-reset/request",
+    response_model=AccountActionResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(rate_limit("auth-password-reset", "auth_rate_limit_per_minute"))],
+)
+async def request_password_reset(
+    payload: PasswordResetRequest,
+    accounts: Annotated[AccountService, Depends(get_account_service)],
+) -> AccountActionResponse:
+    await accounts.request_password_reset(str(payload.email))
+    return AccountActionResponse(
+        message="If an account exists for that address, a reset message has been sent."
+    )
+
+
+@router.post(
+    "/password-reset/confirm",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(rate_limit("auth-password-reset-confirm", "auth_rate_limit_per_minute"))],
+)
+async def confirm_password_reset(
+    payload: PasswordResetConfirmRequest,
+    accounts: Annotated[AccountService, Depends(get_account_service)],
+) -> Response:
+    await accounts.reset_password(payload.token, payload.new_password)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/delete-account",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(rate_limit("auth-delete-account", "auth_rate_limit_per_minute"))],
+)
+async def delete_account(
+    payload: DeleteAccountRequest,
+    settings: SettingsDep,
+    current_user: CurrentUser,
+    accounts: Annotated[AccountService, Depends(get_account_service)],
+) -> Response:
+    await accounts.delete_account(current_user, password=payload.password)
+    response = Response(status_code=status.HTTP_204_NO_CONTENT)
+    clear_auth_cookies(response, settings)
+    return response
