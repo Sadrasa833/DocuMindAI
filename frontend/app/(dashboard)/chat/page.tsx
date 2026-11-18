@@ -32,12 +32,12 @@ const exampleQuestions = [
   "What payment terms are specified?",
 ];
 
+const STREAMING_STORAGE_KEY = "documind.chat.streaming";
+const PENDING_ASSISTANT_PREFIX = "pending-assistant-";
+
 function CitationCard({ citation }: { citation: Citation }) {
-  return (
-    <Link
-      href={`/documents/${citation.document_id}?page=${citation.page_number}`}
-      className="group flex items-center gap-2.5 rounded-lg border border-slate-200 bg-white px-3 py-2 transition hover:border-brand-200 hover:bg-brand-50/50"
-    >
+  const content = (
+    <>
       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-500 group-hover:bg-brand-100 group-hover:text-brand-600">
         <FileText className="h-3.5 w-3.5" />
       </span>
@@ -45,8 +45,32 @@ function CitationCard({ citation }: { citation: Citation }) {
         <span className="block max-w-[190px] truncate text-[11px] font-semibold text-slate-700">
           {citation.document_name}
         </span>
-        <span className="block text-[10px] text-slate-500">Page {citation.page_number}</span>
+        <span className="block text-[10px] text-slate-500">
+          {citation.available
+            ? `Page ${citation.page_number}`
+            : `Page ${citation.page_number} · document unavailable`}
+        </span>
       </span>
+    </>
+  );
+
+  if (!citation.available) {
+    return (
+      <div
+        className="flex cursor-not-allowed items-center gap-2.5 rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-2 opacity-75"
+        title="This source document has been deleted. The citation metadata is preserved for history."
+      >
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <Link
+      href={`/documents/${citation.document_id}?page=${citation.page_number}`}
+      className="group flex items-center gap-2.5 rounded-lg border border-slate-200 bg-white px-3 py-2 transition hover:border-brand-200 hover:bg-brand-50/50"
+    >
+      {content}
     </Link>
   );
 }
@@ -63,8 +87,11 @@ export default function ChatPage() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [documentPanelOpen, setDocumentPanelOpen] = useState(false);
+  const [streamingEnabled, setStreamingEnabled] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const lastMessageContent = messages.length > 0 ? messages[messages.length - 1].content : "";
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
     requestAnimationFrame(() => {
@@ -83,6 +110,9 @@ export default function ChatPage() {
 
   const openConversation = useCallback(
     async (conversationId: string, updateUrl = true) => {
+      abortRef.current?.abort();
+      abortRef.current = null;
+      setSending(false);
       setLoadingConversation(true);
       setError(null);
       setDocumentPanelOpen(false);
@@ -141,9 +171,23 @@ export default function ChatPage() {
 
   useEffect(() => {
     if (messages.length > 0) scrollToBottom("auto");
-  }, [messages.length, scrollToBottom]);
+  }, [lastMessageContent, messages.length, scrollToBottom]);
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem(STREAMING_STORAGE_KEY);
+    if (stored !== null) setStreamingEnabled(stored === "true");
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
 
   function startNewChat() {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setSending(false);
     setActiveConversationId(null);
     setMessages([]);
     setError(null);
@@ -154,11 +198,21 @@ export default function ChatPage() {
     textareaRef.current?.focus();
   }
 
+  function toggleStreaming() {
+    const next = !streamingEnabled;
+    setStreamingEnabled(next);
+    window.localStorage.setItem(STREAMING_STORAGE_KEY, String(next));
+  }
+
   async function handleSend(event?: FormEvent) {
     event?.preventDefault();
     const text = question.trim();
     if (!text || sending) return;
+    const controller = new AbortController();
+    abortRef.current?.abort();
+    abortRef.current = controller;
     const optimisticId = `pending-user-${Date.now()}`;
+    const assistantId = `${PENDING_ASSISTANT_PREFIX}${Date.now()}`;
     const optimisticMessage: Message = {
       id: optimisticId,
       role: "user",
@@ -166,41 +220,104 @@ export default function ChatPage() {
       citations: null,
       created_at: new Date().toISOString(),
     };
-    setMessages((current) => [...current, optimisticMessage]);
+    const placeholderMessage: Message = {
+      id: assistantId,
+      role: "assistant",
+      content: "",
+      citations: null,
+      created_at: new Date().toISOString(),
+    };
+    setMessages((current) =>
+      streamingEnabled
+        ? [...current, optimisticMessage, placeholderMessage]
+        : [...current, optimisticMessage],
+    );
     setQuestion("");
     setSending(true);
     setError(null);
     scrollToBottom();
+    let streamCompleted = false;
     try {
-      const response = await api.chat(text, selectedDocumentIds, activeConversationId);
-      const assistantMessage: Message = {
-        id: `assistant-${Date.now()}`,
-        role: "assistant",
-        content: response.answer,
-        citations: response.citations,
-        created_at: new Date().toISOString(),
-      };
-      setMessages((current) => [...current, assistantMessage]);
-      if (!activeConversationId) {
-        setActiveConversationId(response.conversation_id);
-        if (typeof window !== "undefined") {
-          window.history.replaceState(
-            {},
-            "",
-            `/chat?conversation=${response.conversation_id}`,
-          );
+      if (streamingEnabled) {
+        await api.chatStream(
+          text,
+          selectedDocumentIds,
+          activeConversationId,
+          (streamEvent) => {
+            if (streamEvent.type === "delta") {
+              setMessages((current) =>
+                current.map((message) =>
+                  message.id === assistantId
+                    ? { ...message, content: message.content + streamEvent.content }
+                    : message,
+                ),
+              );
+            } else if (streamEvent.type === "done") {
+              streamCompleted = true;
+              setMessages((current) =>
+                current.map((message) =>
+                  message.id === assistantId
+                    ? {
+                        ...message,
+                        id: streamEvent.message_id || assistantId,
+                        content: streamEvent.answer,
+                        citations: streamEvent.citations,
+                      }
+                    : message,
+                ),
+              );
+              setActiveConversationId(streamEvent.conversation_id);
+              if (typeof window !== "undefined") {
+                window.history.replaceState(
+                  {},
+                  "",
+                  `/chat?conversation=${streamEvent.conversation_id}`,
+                );
+              }
+              void loadConversations();
+            }
+          },
+          controller.signal,
+        );
+        if (!streamCompleted) {
+          throw new Error("The response stream ended unexpectedly. Please try again.");
+        }
+      } else {
+        const response = await api.chat(text, selectedDocumentIds, activeConversationId);
+        const assistantMessage: Message = {
+          id: `assistant-${Date.now()}`,
+          role: "assistant",
+          content: response.answer,
+          citations: response.citations,
+          created_at: new Date().toISOString(),
+        };
+        setMessages((current) => [...current, assistantMessage]);
+        if (!activeConversationId) {
+          setActiveConversationId(response.conversation_id);
+          if (typeof window !== "undefined") {
+            window.history.replaceState(
+              {},
+              "",
+              `/chat?conversation=${response.conversation_id}`,
+            );
+          }
         }
         void loadConversations();
-      } else {
-        void loadConversations();
       }
-      scrollToBottom();
     } catch (err) {
-      setMessages((current) => current.filter((message) => message.id !== optimisticId));
+      if (controller.signal.aborted || streamCompleted) return;
+      setMessages((current) =>
+        current.filter(
+          (message) => message.id !== optimisticId && message.id !== assistantId,
+        ),
+      );
       setQuestion(text);
       setError(getErrorMessage(err));
     } finally {
-      setSending(false);
+      if (abortRef.current === controller) {
+        abortRef.current = null;
+        setSending(false);
+      }
     }
   }
 
@@ -308,13 +425,31 @@ export default function ChatPage() {
                 Grounded with document citations
               </p>
             </div>
-            <div className="relative">
+            <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => setDocumentPanelOpen((current) => !current)}
-                className="btn-secondary !px-3 !py-2 text-xs"
-                aria-expanded={documentPanelOpen}
+                onClick={toggleStreaming}
+                disabled={sending}
+                aria-pressed={streamingEnabled}
+                className={`btn-ghost !px-2.5 !py-2 text-[11px] font-semibold ${
+                  streamingEnabled ? "text-brand-700" : "text-slate-500"
+                }`}
+                title="Toggle progressive response streaming"
               >
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    streamingEnabled ? "bg-emerald-500" : "bg-slate-300"
+                  }`}
+                />
+                Streaming {streamingEnabled ? "on" : "off"}
+              </button>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setDocumentPanelOpen((current) => !current)}
+                  className="btn-secondary !px-3 !py-2 text-xs"
+                  aria-expanded={documentPanelOpen}
+                >
                 <FileText className="h-3.5 w-3.5" />
                 {selectedDocumentIds.length === 0
                   ? "All documents"
@@ -388,6 +523,7 @@ export default function ChatPage() {
                   )}
                 </div>
               )}
+              </div>
             </div>
           </header>
 
@@ -451,7 +587,23 @@ export default function ChatPage() {
                       </span>
                       <div className="min-w-0 max-w-[88%]">
                         <div className="rounded-2xl rounded-tl-md border border-slate-200 bg-white px-4 py-3 text-sm leading-7 text-slate-700 shadow-sm">
-                          <p className="whitespace-pre-wrap">{message.content}</p>
+                          {message.content ? (
+                            <p className="whitespace-pre-wrap">
+                              {message.content}
+                              {message.id.startsWith(PENDING_ASSISTANT_PREFIX) && (
+                                <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse rounded-sm bg-brand-500 align-middle" />
+                              )}
+                            </p>
+                          ) : (
+                            <div className="flex items-center gap-2 text-xs text-slate-500">
+                              <span className="flex gap-1">
+                                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-brand-400 [animation-delay:-0.3s]" />
+                                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-brand-400 [animation-delay:-0.15s]" />
+                                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-brand-400" />
+                              </span>
+                              Searching your documents…
+                            </div>
+                          )}
                         </div>
                         {message.citations && message.citations.length > 0 && (
                           <div className="mt-2.5">
@@ -472,7 +624,7 @@ export default function ChatPage() {
                     </div>
                   ),
                 )}
-                {sending && (
+                {sending && !streamingEnabled && (
                   <div className="flex gap-3">
                     <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-ink-950 text-brand-300">
                       <Sparkles className="h-4 w-4" />

@@ -63,6 +63,15 @@ async def get_conversation(
 ) -> ConversationDetail:
     conversation = await service.get_owned(conversation_id, current_user.id)
     messages = [MessageResponse.model_validate(message) for message in conversation.messages]
+    cited_document_ids = {
+        citation.document_id for message in messages for citation in (message.citations or [])
+    }
+    available_document_ids = await service.available_document_ids(
+        current_user.id, cited_document_ids
+    )
+    for message in messages:
+        for citation in message.citations or []:
+            citation.available = citation.document_id in available_document_ids
     return ConversationDetail(
         id=conversation.id,
         title=conversation.title,

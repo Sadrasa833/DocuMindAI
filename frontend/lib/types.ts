@@ -7,6 +7,8 @@ export type DocumentStatus =
 
 export type SummaryStyle = "short" | "detailed";
 
+export type SummaryStatus = "none" | "pending" | "processing" | "completed" | "failed";
+
 export interface User {
   id: string;
   email: string;
@@ -30,6 +32,8 @@ export interface DocumentItem {
   error_message: string | null;
   summary: string | null;
   summary_style: SummaryStyle | null;
+  summary_status: SummaryStatus;
+  summary_error: string | null;
   summarized_at: string | null;
   processed_at: string | null;
   created_at: string;
@@ -49,6 +53,8 @@ export interface DocumentStatusResponse {
   id: string;
   status: DocumentStatus;
   error_message: string | null;
+  summary_status: SummaryStatus;
+  summary_error: string | null;
   page_count: number | null;
   chunk_count: number;
   updated_at: string;
@@ -56,9 +62,13 @@ export interface DocumentStatusResponse {
 
 export interface SummaryResponse {
   document_id: string;
-  style: SummaryStyle;
-  summary: string;
-  created_at: string;
+  style: SummaryStyle | null;
+  status: SummaryStatus;
+  summary: string | null;
+  error_message: string | null;
+  started_at: string | null;
+  created_at: string | null;
+  updated_at: string;
 }
 
 export interface Page<T> {
@@ -74,6 +84,7 @@ export interface Citation {
   document_name: string;
   page_number: number;
   chunk_id: string;
+  available: boolean;
 }
 
 export interface Message {
@@ -96,11 +107,46 @@ export interface ConversationDetail extends ConversationSummary {
   messages: Message[];
 }
 
+export interface CitationValidationSummary {
+  enabled: boolean;
+  supported_claims: number;
+  unsupported_claims: number;
+  refused: boolean;
+}
+
 export interface ChatResponse {
   answer: string;
   conversation_id: string;
   citations: Citation[];
+  citation_validation?: CitationValidationSummary | null;
 }
+
+export interface ChatStreamMeta {
+  type: "meta";
+  conversation_id: string | null;
+}
+
+export interface ChatStreamDelta {
+  type: "delta";
+  content: string;
+}
+
+export interface ChatStreamDone {
+  type: "done";
+  conversation_id: string;
+  message_id: string;
+  answer: string;
+  citations: Citation[];
+  replaced: boolean;
+  citation_validation?: CitationValidationSummary | null;
+}
+
+export interface ChatStreamError {
+  type: "error";
+  message: string;
+}
+
+export type ChatStreamEvent = ChatStreamMeta | ChatStreamDelta | ChatStreamDone | ChatStreamError;
 
 export interface SearchResult {
   chunk_id: string;

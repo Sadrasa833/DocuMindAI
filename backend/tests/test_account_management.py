@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -16,6 +17,10 @@ from app.models.user import User
 from app.workers.tasks import _cleanup_expired_tokens
 from tests.conftest import TEST_UPLOAD_PATH, settings
 from tests.fakes import register_user, upload_pdf
+
+
+def _pdf_files() -> list[Path]:
+    return list(Path(TEST_UPLOAD_PATH).rglob("*.pdf"))
 
 
 async def _user(email: str = "ada@example.com") -> User:
@@ -88,7 +93,8 @@ async def test_login_can_require_verified_email(
     assert client.cookies.get("documind_access") is None
 
     token = email_sender.latest_token("email_verification")
-    assert (await client.post("/api/v1/auth/verify-email", json={"token": token})).status_code == 200
+    verified = await client.post("/api/v1/auth/verify-email", json={"token": token})
+    assert verified.status_code == 200
     allowed = await client.post(
         "/api/v1/auth/login",
         json={"email": "ada@example.com", "password": "SecurePass123"},
@@ -147,9 +153,7 @@ async def test_password_reset_is_enumeration_safe_and_single_use(
     assert new_login.status_code == 200
 
 
-async def test_password_reset_revokes_existing_sessions(
-    client_factory, email_sender
-) -> None:
+async def test_password_reset_revokes_existing_sessions(client_factory, email_sender) -> None:
     first = await client_factory()
     await register_user(first)
     old_refresh = first.cookies.get("documind_refresh")
@@ -180,7 +184,7 @@ async def test_account_deletion_requires_password_and_removes_owned_data(
 ) -> None:
     await register_user(client)
     document = (await upload_pdf(client)).json()
-    stored_files = list(Path(TEST_UPLOAD_PATH).rglob("*.pdf"))
+    stored_files = await asyncio.to_thread(_pdf_files)
     assert stored_files
 
     denied = await client.post(
@@ -196,7 +200,7 @@ async def test_account_deletion_requires_password_and_removes_owned_data(
     )
     assert deleted.status_code == 204, deleted.text
     assert client.cookies.get("documind_access") is None
-    assert not list(Path(TEST_UPLOAD_PATH).rglob("*.pdf"))
+    assert not await asyncio.to_thread(_pdf_files)
 
     assert (await client.get("/api/v1/auth/me")).status_code == 401
     login = await client.post(

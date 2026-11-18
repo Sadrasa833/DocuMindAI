@@ -75,10 +75,16 @@ class AccountService:
     ) -> None:
         try:
             await self.email_sender.send(to=to, subject=subject, text=text)
-        except Exception:
-            logger.exception(
+        except Exception as exc:
+            # Do not include the exception message or traceback: transport errors
+            # can echo message content that contains single-use tokens.
+            logger.warning(
                 "Could not deliver account email",
-                extra={"purpose": purpose.value, "email_to": to},
+                extra={
+                    "purpose": purpose.value,
+                    "email_to": to,
+                    "error_type": type(exc).__name__,
+                },
             )
 
     async def send_verification(self, user: User, *, force: bool = False) -> None:

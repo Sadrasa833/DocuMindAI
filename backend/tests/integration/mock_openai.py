@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 import time
+from collections.abc import AsyncIterator
 from typing import Any
 
 from fastapi import FastAPI, Request
+from fastapi.responses import StreamingResponse
 
 _TOKEN_PATTERN = re.compile(r"[a-z0-9]+")
 _DEFAULT_DIMENSIONS = 1536
@@ -59,9 +62,39 @@ async def create_embeddings(request: Request) -> dict[str, Any]:
     }
 
 
+async def _stream_answer(payload: dict[str, Any]) -> AsyncIterator[str]:
+    base = {
+        "id": f"chatcmpl-mock-{int(time.time())}",
+        "object": "chat.completion.chunk",
+        "created": int(time.time()),
+        "model": payload.get("model", "mock-chat-model"),
+    }
+    for index, token in enumerate(_CHAT_ANSWER.split(" ")):
+        content = token if index == 0 else f" {token}"
+        chunk = {
+            **base,
+            "choices": [
+                {
+                    "index": 0,
+                    "delta": {"content": content},
+                    "finish_reason": None,
+                }
+            ],
+        }
+        yield f"data: {json.dumps(chunk)}\n\n"
+    finish = {
+        **base,
+        "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
+    }
+    yield f"data: {json.dumps(finish)}\n\n"
+    yield "data: [DONE]\n\n"
+
+
 @app.post("/v1/chat/completions")
-async def create_chat_completion(request: Request) -> dict[str, Any]:
+async def create_chat_completion(request: Request):
     payload = await request.json()
+    if payload.get("stream"):
+        return StreamingResponse(_stream_answer(payload), media_type="text/event-stream")
     return {
         "id": f"chatcmpl-mock-{int(time.time())}",
         "object": "chat.completion",

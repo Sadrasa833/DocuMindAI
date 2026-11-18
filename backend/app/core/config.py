@@ -111,6 +111,7 @@ class Settings(BaseSettings):
     summary_reduce_chunk_chars: int = Field(default=20_000, ge=1000, le=80_000)
     summary_max_tokens: int = Field(default=1200, ge=100, le=4000)
     summary_stuck_after_seconds: int = Field(default=1800, ge=300)
+    summary_recovery_interval_seconds: int = Field(default=300, ge=30)
 
     cors_origins: str = "http://localhost:3000"
     rate_limit_enabled: bool = True

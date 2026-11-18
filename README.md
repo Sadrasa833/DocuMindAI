@@ -8,19 +8,18 @@ The repository contains a FastAPI backend, a Next.js dashboard, a Celery worker,
 
 Verified in this workspace:
 
-- Backend default suite: **86 tests passed, 9 infrastructure tests skipped** on Python 3.14 with SQLite and mocked AI providers.
-- Backend: **90% line coverage** across `app/` for the default suite.
+- Backend default suite: **160 tests passed, 10 infrastructure tests skipped** on Python 3.14 with SQLite and mocked AI providers.
+- Backend: **89% line coverage** across `app/` for the default suite.
 - Backend: Ruff lint and formatting checks pass.
-- Infrastructure: **10 integration tests passed** against the live Compose stack, covering PostgreSQL 16/pgvector migrations from an empty schema, vector search, HNSW usage, ownership isolation, Redis, Celery processing, Persian OCR, and Celery Beat recovery.
-- Docker Compose health checks passed for backend, worker, beat, PostgreSQL, Redis, and the mock AI service.
-- The Celery worker was restarted and the Docker/Celery suite passed again.
-- Frontend: TypeScript, ESLint, and the Next.js production build pass.
+- Infrastructure: **10 integration tests passed** against the live Compose stack, covering PostgreSQL 16/pgvector migrations from an empty schema, vector search, HNSW usage, ownership isolation, Redis, Celery processing, Persian OCR, Celery Beat recovery, and streamed chat.
+- Docker Compose health checks passed for backend, worker, beat, frontend, PostgreSQL, Redis, and the mock AI service.
+- Frontend: TypeScript, ESLint, the Next.js production build, and **2 Playwright browser E2E tests** pass.
+- RAG dataset validation passes for 10 documents and 110 questions (100 answerable, 10 unanswerable).
 - Docker Compose configuration parses successfully with the example environment.
 
 Not verified in this workspace:
 
-- No live OpenAI request was made; infrastructure tests use the deterministic mock AI service.
-- Playwright browser E2E tests were not executed because a compatible browser was unavailable.
+- No live OpenAI request was made; infrastructure tests and browser E2E tests use the deterministic mock AI service.
 
 See [Testing](#testing) and [Known limitations](#known-limitations) for details.
 
@@ -36,7 +35,8 @@ See [Testing](#testing) and [Known limitations](#known-limitations) for details.
 - Asynchronous processing through Celery and Redis.
 - Processing status, retry behavior, error reporting, and idempotent task handling.
 - Document filtering, search, sorting, pagination, statistics, deletion, and polling.
-- Short and detailed summaries, including map-reduce summarization for long documents.
+- Short and detailed summaries generated asynchronously by Celery, with status polling, per-attempt ownership, and stuck-job recovery.
+- Map-reduce summarization for long documents.
 
 ### Search and AI
 
@@ -45,6 +45,10 @@ See [Testing](#testing) and [Known limitations](#known-limitations) for details.
 - Minimum-similarity filtering to avoid answering from irrelevant chunks.
 - Optional search scope across selected documents.
 - Grounded RAG answers with source citations containing document, page, and chunk identifiers.
+- Optional SSE streaming at `POST /api/v1/chat/stream`; the final event always carries the validated answer and citations.
+- Claim-level citation validation using numeric, negation, and lexical evidence, with optional batched semantic checking.
+- Any unsupported cited claim causes a deterministic insufficient-context refusal instead of returning a partially verified answer.
+- Historical citations remain readable after a document is deleted and are marked unavailable in the UI.
 - Conversation persistence and recent-message context for follow-up questions.
 - Prompt-injection boundaries that mark retrieved content as untrusted data.
 - Graceful "insufficient context" response without calling the language model when retrieval is weak.
@@ -55,6 +59,8 @@ See [Testing](#testing) and [Known limitations](#known-limitations) for details.
 - Short-lived JWT access tokens and rotating refresh tokens in `HttpOnly` cookies.
 - Refresh-token reuse detection that revokes a user's active sessions.
 - CSRF-conscious same-origin proxy for browser mutations.
+- Optional email verification and password-reset flows through console or SMTP email backends.
+- Password-confirmed account deletion, including stored files and active sessions.
 - Redis-backed rate limiting with an in-memory fallback.
 - Request IDs, structured logging support, security headers, and consistent error envelopes.
 - Liveness and readiness probes.
@@ -65,8 +71,8 @@ See [Testing](#testing) and [Known limitations](#known-limitations) for details.
 - Registration, login, and logout.
 - Dashboard statistics and recent documents.
 - Upload progress, polling, document filtering, and sorting.
-- Document detail, summarized content, and status handling.
-- Citation-aware chat and conversation history.
+- Document detail, asynchronous summary polling, and unavailable-citation rendering.
+- Citation-aware chat with an optional streaming mode and conversation history.
 - Profile and password management.
 
 ## Architecture
@@ -267,12 +273,23 @@ All application settings are documented in `.env.example`. The most important va
 | `OPENAI_BASE_URL` | OpenAI default | Optional OpenAI-compatible endpoint. |
 | `OPENAI_CHAT_MODEL` | `gpt-4o-mini` | Chat and summarization model. |
 | `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | Embedding model. |
-| `EMBEDDING_DIMENSIONS` | `1536` | Must match the pgvector column and initial migration. |
+| `EMBEDDING_DIMENSIONS` | `1536` | Must match the pgvector column and migration chain. |
 | `DATABASE_URL` | local PostgreSQL | SQLAlchemy database URL. |
 | `REDIS_URL` | `redis://localhost:6379/0` | Rate-limit store. |
 | `CELERY_BROKER_URL` | Redis DB 0 | Celery broker. |
 | `CELERY_RESULT_BACKEND` | Redis DB 1 | Celery result backend. |
 | `CORS_ORIGINS` | `http://localhost:3000` | Comma-separated explicit origins. Wildcards are rejected. |
+| `FRONTEND_BASE_URL` | `http://localhost:3000` | Base URL used in verification and password-reset links. |
+| `EMAIL_BACKEND` | `console` | `console` or `smtp`; production rejects `console`. |
+| `EMAIL_FROM` | `DocuMind AI <no-reply@documind.local>` | Sender for verification and reset messages. |
+| `SMTP_HOST` / `SMTP_PORT` | unset / `587` | Required when `EMAIL_BACKEND=smtp`. |
+| `SMTP_USERNAME` / `SMTP_PASSWORD` | unset | Set both or neither. |
+| `SMTP_STARTTLS` | `true` | Use STARTTLS for SMTP delivery. |
+| `EMAIL_VERIFICATION_REQUIRED` | `false` | Require a verified email before login. |
+| `EMAIL_VERIFICATION_TOKEN_HOURS` | `24` | Verification-token lifetime. |
+| `PASSWORD_RESET_TOKEN_MINUTES` | `60` | Password-reset token lifetime. |
+| `TOKEN_CLEANUP_RETENTION_DAYS` | `30` | Retention for used or expired auth tokens before cleanup. |
+| `TOKEN_CLEANUP_INTERVAL_SECONDS` | `86400` | Celery Beat interval for auth-token cleanup. |
 | `COOKIE_SECURE` | `false` | Must be `true` in production and whenever SameSite is `none`. |
 | `REFRESH_REUSE_GRACE_SECONDS` | `30` | Window in which racing refreshes retry instead of revoking the session family. |
 | `MAX_UPLOAD_SIZE_MB` | `20` | Per-file upload limit. |
@@ -297,6 +314,8 @@ All application settings are documented in `.env.example`. The most important va
 | `RAG_CITATION_SEMANTIC_THRESHOLD` | `0.45` | Minimum claim/source cosine similarity when semantic checking is enabled. |
 | `SUMMARY_MAP_CHUNK_CHARS` | `12000` | Map-phase input grouping. |
 | `SUMMARY_REDUCE_CHUNK_CHARS` | `20000` | Reduce-phase grouping. |
+| `SUMMARY_STUCK_AFTER_SECONDS` | `1800` | Age after which a pending or processing summary is recovered. |
+| `SUMMARY_RECOVERY_INTERVAL_SECONDS` | `300` | Celery Beat interval for summary recovery. |
 | `RATE_LIMIT_ENABLED` | `true` | Enables endpoint-specific Redis rate limits. |
 
 Production validation requires:
@@ -307,6 +326,7 @@ Production validation requires:
 - A non-placeholder `SECRET_KEY`
 - Explicit `CORS_ORIGINS` without wildcards
 - HTTPS at the edge
+- `EMAIL_BACKEND=smtp` with a reachable SMTP host and complete credentials
 - A non-empty `S3_BUCKET` when `STORAGE_BACKEND=s3`, with matching credentials and optional prefix
 - A reachable ClamAV daemon when `MALWARE_SCANNING_ENABLED=true`; scanning fails closed
 
@@ -325,15 +345,22 @@ All application endpoints are under `/api/v1` except health and documentation ro
 | `GET` | `/api/v1/auth/me` | Return the current user. |
 | `PATCH` | `/api/v1/auth/me` | Update the current user's name. |
 | `POST` | `/api/v1/auth/change-password` | Change password and rotate sessions. |
+| `POST` | `/api/v1/auth/verify-email` | Consume an email-verification token. |
+| `POST` | `/api/v1/auth/resend-verification` | Send a fresh verification message to the current user. |
+| `POST` | `/api/v1/auth/password-reset/request` | Send a password-reset message without revealing account existence. |
+| `POST` | `/api/v1/auth/password-reset/confirm` | Set a new password from a reset token. |
+| `POST` | `/api/v1/auth/delete-account` | Delete the authenticated account after password confirmation. |
 | `POST` | `/api/v1/documents/upload` | Upload a PDF as multipart form data. |
 | `GET` | `/api/v1/documents` | List documents with filters and pagination. |
 | `GET` | `/api/v1/documents/stats` | Return dashboard statistics. |
 | `GET` | `/api/v1/documents/{id}` | Return document detail. |
-| `GET` | `/api/v1/documents/{id}/status` | Poll processing status. |
+| `GET` | `/api/v1/documents/{id}/status` | Poll processing and summary status. |
 | `DELETE` | `/api/v1/documents/{id}` | Delete a document and its chunks. |
-| `POST` | `/api/v1/documents/{id}/summarize` | Generate or retrieve a summary. |
+| `GET` | `/api/v1/documents/{id}/summary` | Return the cached, pending, or failed summary state. |
+| `POST` | `/api/v1/documents/{id}/summarize` | Queue a summary job (`202`) or return a cached summary (`200`). |
 | `POST` | `/api/v1/search` | Run semantic search. |
 | `POST` | `/api/v1/chat` | Ask a grounded question and persist the conversation. |
+| `POST` | `/api/v1/chat/stream` | Stream `meta`/`delta`/`done`/`error` SSE events; `done` contains the validated answer. |
 | `POST` | `/api/v1/conversations` | Create an empty conversation. |
 | `GET` | `/api/v1/conversations` | List conversations. |
 | `GET` | `/api/v1/conversations/{id}` | Return messages and citations. |
@@ -409,11 +436,13 @@ Covered areas include:
 - Upload validation, traversal rejection, size and per-user quota limits, local/S3 storage behavior, optional malware scanning, ownership, filtering, pagination, sorting, stats, and deletion.
 - PDF extraction, OCR fallback, chunking, embedding, idempotency, failure handling, stuck-document recovery, and document status transitions.
 - Semantic search, similarity thresholds, filters, and cross-user isolation.
-- RAG citations, claim-level source validation, conversation persistence, history handling, weak-context shortcuts, and prompt-injection boundaries.
-- Summary caching, force regeneration, map-reduce behavior, and long-summary reduction progress.
+- RAG citations, claim-level source validation, unsupported-claim refusal, historical citation availability, conversation persistence, history handling, weak-context shortcuts, and prompt-injection boundaries.
+- Chat streaming events, final validated answers, cancellation, provider failures, and persistence.
+- Asynchronous summary dispatch, attempt ownership, status polling, failure handling, stuck-job recovery, map-reduce behavior, and long-summary reduction progress.
+- Email verification, password reset, account deletion, auth-token cleanup, and secure email logging.
 - Health checks, error envelopes, request IDs, CORS, rate limiting, and OpenAPI route registration.
 - Configuration validation for CORS wildcards and production security settings.
-- RAG evaluation metrics, including retrieval hit rate, MRR, citation precision/recall, unsupported-citation rate, and refusal accuracy.
+- RAG evaluation metrics, including retrieval hit rate, MRR, citation precision/recall, unsupported-citation rate, claim support through API validation metadata, and refusal accuracy.
 
 ### RAG benchmark
 
@@ -510,10 +539,10 @@ For internet-facing deployment, also use TLS, a reverse proxy, private database/
 │   │   ├── models/          # Users, documents, chunks, conversations, tokens
 │   │   ├── repositories/    # Ownership-aware persistence queries
 │   │   ├── schemas/         # Pydantic request/response models
-│   │   ├── services/        # Auth, uploads, processing, search, RAG, summaries
+│   │   ├── services/        # Auth, accounts, uploads, processing, search, RAG, summaries
 │   │   ├── utils/           # PDF text/chunking and upload helpers
-│   │   └── workers/         # Celery application and processing tasks
-│   ├── alembic/             # Initial pgvector migration
+│   │   └── workers/         # Celery application, processing, summary, and cleanup tasks
+│   ├── alembic/             # pgvector, account-token, and async-summary migrations
 │   ├── evals/               # Verified RAG benchmark dataset, harness, and report
 │   ├── tests/               # Backend test suite and fakes
 │   ├── Dockerfile
@@ -540,17 +569,18 @@ For internet-facing deployment, also use TLS, a reverse proxy, private database/
 - Local filesystem storage is used by default. Horizontal backend scaling requires shared local storage or `STORAGE_BACKEND=s3`.
 - Storage quotas are enforced per user across all stored PDFs; plan-based quota tiers are not implemented.
 - The application only accepts PDFs. Scanned pages are processed with Tesseract when OCR is enabled and the configured language packs are installed; OCR quality depends on scan quality, and the configured page/time limits still apply.
-- Citation validation is deterministic by default. Heavily paraphrased claims may be refused unless `RAG_CITATION_SEMANTIC_CHECK=true`; it is not a formal entailment proof.
-- Chat responses are not streamed; the request waits for the full model response.
-- Document summaries are generated synchronously during the HTTP request and can be slow for large documents.
-- There is no email verification, password-reset email flow, or account deletion.
+- Citation validation is deterministic by default. Heavily paraphrased claims may be refused unless `RAG_CITATION_SEMANTIC_CHECK=true`; it is not a formal entailment proof. Any unsupported cited claim refuses the whole answer rather than returning partial support.
+- Chat streaming uses a POST fetch with a `ReadableStream` client rather than `EventSource`. Reverse proxies and gateways must not buffer SSE responses; the API sends `Cache-Control: no-cache, no-transform` and `X-Accel-Buffering: no`.
+- Document summaries are Celery jobs. `POST /documents/{id}/summarize` returns `202` when queued (or `200` for a cached summary), and clients poll `GET /documents/{id}/summary`. Summaries require a running worker, and stuck-job recovery requires Celery Beat.
+- Email verification is optional by default (`EMAIL_VERIFICATION_REQUIRED=false`). Production requires SMTP; the dashboard does not yet expose dedicated verification, password-reset, or account-deletion screens, so those backend endpoints are API-only.
+- Auth-token cleanup depends on the periodic Celery Beat cleanup task.
 - Malware scanning is optional and disabled by default. When enabled, it requires a reachable ClamAV daemon and fails closed.
 - A worker process killed without raising a Python exception can leave a document in `processing`; a periodic Celery Beat task recovers stale rows, but operator intervention is still required if Beat is not running.
 - Deleting a document removes its file, chunks, and searchability, but citations in historical chat messages are retained as a record and can point to the deleted document.
 - Rate limits are per client IP and depend on correct trusted-proxy configuration when deployed behind a gateway.
 - Refresh-token history has no scheduled retention cleanup.
 - The default suite uses SQLite; PostgreSQL/pgvector, Redis, Celery, and Alembic are covered by opt-in integration tests that require the Compose stack.
-- Playwright browser E2E tests are included but were not executed in this workspace because they require the running Compose stack and an installed browser.
+- Playwright browser E2E tests require the running Compose stack and an installed Chromium (`npx playwright install chromium`).
 
 ## Contributing
 

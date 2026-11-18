@@ -174,6 +174,12 @@ async def test_chat_uses_retrieved_documents_and_persists_citations(
     assert citation["document_id"] == document["id"]
     assert citation["document_name"] == "agreement.pdf"
     assert citation["page_number"] == 1
+    assert body["citation_validation"] == {
+        "enabled": True,
+        "supported_claims": 1,
+        "unsupported_claims": 0,
+        "refused": False,
+    }
 
     assert len(chat_provider.calls) == 1
     call = chat_provider.calls[0]

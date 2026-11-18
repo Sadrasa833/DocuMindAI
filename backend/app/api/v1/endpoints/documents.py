@@ -12,7 +12,7 @@ from app.api.deps import (
     get_summarization_service,
 )
 from app.core.rate_limit import rate_limit
-from app.models.enums import DocumentStatus
+from app.models.enums import DocumentStatus, SummaryStatus
 from app.schemas.common import PaginatedResponse
 from app.schemas.document import (
     DocumentResponse,
@@ -22,7 +22,7 @@ from app.schemas.document import (
     SummaryResponse,
 )
 from app.services.documents import DocumentService
-from app.services.summarization import SummarizationService
+from app.services.summarization import SummarizationService, SummaryResult
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
@@ -111,26 +111,51 @@ async def delete_document(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+def _summary_response(result: SummaryResult) -> SummaryResponse:
+    return SummaryResponse(
+        document_id=result.document_id,
+        style=result.style,
+        status=result.status,
+        summary=result.summary,
+        error_message=result.error_message,
+        started_at=result.started_at,
+        created_at=result.created_at,
+        updated_at=result.updated_at,
+    )
+
+
+@router.get("/{document_id}/summary", response_model=SummaryResponse)
+async def get_document_summary(
+    document_id: uuid.UUID,
+    current_user: CurrentUser,
+    service: Annotated[SummarizationService, Depends(get_summarization_service)],
+) -> SummaryResponse:
+    result = await service.get_state(
+        user_id=current_user.id,
+        document_id=document_id,
+    )
+    return _summary_response(result)
+
+
 @router.post(
     "/{document_id}/summarize",
     response_model=SummaryResponse,
+    status_code=status.HTTP_202_ACCEPTED,
     dependencies=[Depends(rate_limit("documents-summarize", "chat_rate_limit_per_minute"))],
 )
 async def summarize_document(
     document_id: uuid.UUID,
     payload: SummarizeRequest,
+    response: Response,
     current_user: CurrentUser,
     service: Annotated[SummarizationService, Depends(get_summarization_service)],
 ) -> SummaryResponse:
-    result = await service.summarize(
+    result, queued = await service.request_summary(
         user_id=current_user.id,
         document_id=document_id,
         style=payload.style,
         force=payload.force,
     )
-    return SummaryResponse(
-        document_id=result.document_id,
-        style=result.style,
-        summary=result.summary,
-        created_at=result.created_at,
-    )
+    if not queued and result.status == SummaryStatus.COMPLETED:
+        response.status_code = status.HTTP_200_OK
+    return _summary_response(result)

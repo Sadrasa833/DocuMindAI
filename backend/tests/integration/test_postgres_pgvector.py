@@ -152,7 +152,7 @@ async def test_migrations_install_pgvector_and_hnsw_index(
         ).scalar_one()
 
     assert extension.startswith("0.")
-    assert version == "0003_processing_attempts"
+    assert version == "0005_async_summaries"
     assert "USING hnsw" in index
     assert "vector_cosine_ops" in index
     assert columns == f"vector({DIMENSIONS})"

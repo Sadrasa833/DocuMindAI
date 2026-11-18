@@ -102,8 +102,14 @@ async def database_schema() -> AsyncIterator[None]:
 @pytest.fixture(autouse=True)
 def reset_fakes() -> AsyncIterator[None]:
     fake_dispatcher.enqueued.clear()
+    fake_dispatcher.summary_jobs.clear()
+    fake_dispatcher.fail_summary_dispatch = False
     fake_embedding_provider.calls.clear()
     fake_chat_provider.calls.clear()
+    fake_chat_provider.error = None
+    fake_chat_provider.stream_chunks = None
+    fake_chat_provider.stream_delay = 0.0
+    fake_chat_provider.fail_stream_after = None
     fake_email_sender.messages.clear()
     fake_chat_provider.response = "The documents state that payment is due within 30 days [S1]."
     shutil.rmtree(TEST_UPLOAD_PATH, ignore_errors=True)
@@ -179,6 +185,36 @@ def chat_provider() -> FakeChatProvider:
 @pytest.fixture
 def email_sender() -> FakeEmailSender:
     return fake_email_sender
+
+
+@pytest.fixture
+def dispatcher() -> FakeTaskDispatcher:
+    return fake_dispatcher
+
+
+@pytest_asyncio.fixture
+async def run_summarization() -> AsyncIterator[Callable[..., object]]:
+    from app.models.enums import SummaryStyle
+    from app.services.summarization import SummarizationService
+
+    async def run(
+        document_id: uuid.UUID,
+        style: str,
+        attempt_id: uuid.UUID,
+    ) -> bool:
+        async with AsyncSessionLocal() as session:
+            service = SummarizationService(
+                session,
+                settings=settings,
+                chat_provider=fake_chat_provider,
+            )
+            return await service.execute(
+                document_id=document_id,
+                style=SummaryStyle(style),
+                attempt_id=attempt_id,
+            )
+
+    yield run
 
 
 @pytest.fixture

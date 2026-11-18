@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import json
 import os
 import time
 import uuid
@@ -123,6 +124,28 @@ def test_docker_celery_upload_search_and_chat_round_trip() -> None:
         messages = conversation.json()["messages"]
         assert [message["role"] for message in messages] == ["user", "assistant"]
         assert "[S1]" in messages[-1]["content"]
+
+        events: list[dict] = []
+        with client.stream(
+            "POST",
+            "/api/v1/chat/stream",
+            json={
+                "question": "What are the payment terms and when is payment due?",
+                "document_ids": [document["id"]],
+            },
+        ) as stream:
+            assert stream.status_code == 200, stream.read().decode()
+            for line in stream.iter_lines():
+                if line.startswith("data: "):
+                    events.append(json.loads(line[6:]))
+
+        assert events[0]["type"] == "meta"
+        deltas = "".join(event["content"] for event in events if event["type"] == "delta")
+        assert "payment terms" in deltas.lower()
+        done = next(event for event in events if event["type"] == "done")
+        assert "[S1]" in done["answer"]
+        assert done["citations"][0]["document_id"] == document["id"]
+        assert done["citation_validation"]["refused"] is False
 
 
 def test_docker_celery_ocrs_an_image_only_pdf() -> None:

@@ -50,6 +50,12 @@ def test_evaluate_question_tracks_retrieval_and_citation_targets() -> None:
         {
             "answer": "It renews annually and requires sixty days notice.",
             "citations": [make_citation()],
+            "citation_validation": {
+                "enabled": True,
+                "supported_claims": 1,
+                "unsupported_claims": 0,
+                "refused": False,
+            },
         },
         UPLOADED_IDS,
         top_k=5,
@@ -63,6 +69,10 @@ def test_evaluate_question_tracks_retrieval_and_citation_targets() -> None:
     assert evaluated["citation_precision"] == 1.0
     assert evaluated["citation_recall"] == 1.0
     assert evaluated["unsupported_citation_count"] == 0
+    assert evaluated["citation_validation_available"] is True
+    assert evaluated["supported_claim_count"] == 1
+    assert evaluated["unsupported_claim_count"] == 0
+    assert evaluated["claim_support_rate"] == 1.0
     assert evaluated["refusal_success"] is None
     assert evaluated["refusal_correct"] is True
 
@@ -166,6 +176,66 @@ def test_summarize_results_calculates_retrieval_and_refusal_metrics() -> None:
     assert summary["unsupported_citation_rate"] == 0.0
     assert summary["unanswerable_refusal_rate"] == 1.0
     assert summary["refusal_accuracy"] == 1.0
+
+
+def test_summarize_results_reports_claim_support_metrics() -> None:
+    partially_supported = {
+        "refusal_success": None,
+        "retrieval_hit": True,
+        "retrieval_rank": 1,
+        "keyword_recall": 1.0,
+        "citation_target_match": True,
+        "citation_valid": True,
+        "citation_count": 1,
+        "citation_precision": 1.0,
+        "citation_recall": 1.0,
+        "unsupported_citation_count": 0,
+        "citation_validation_available": True,
+        "supported_claim_count": 3,
+        "unsupported_claim_count": 1,
+        "claim_support_rate": 0.75,
+        "refusal_correct": True,
+    }
+    refused = {
+        "refusal_success": None,
+        "retrieval_hit": True,
+        "retrieval_rank": 1,
+        "keyword_recall": 0.0,
+        "citation_target_match": False,
+        "citation_valid": True,
+        "citation_count": 0,
+        "citation_precision": 0.0,
+        "citation_recall": 0.0,
+        "unsupported_citation_count": 0,
+        "citation_validation_available": True,
+        "supported_claim_count": 0,
+        "unsupported_claim_count": 2,
+        "claim_support_rate": 0.0,
+        "refusal_correct": False,
+    }
+    unanswerable = {
+        "refusal_success": True,
+        "retrieval_hit": False,
+        "retrieval_rank": None,
+        "keyword_recall": 1.0,
+        "citation_target_match": True,
+        "citation_valid": True,
+        "citation_count": 0,
+        "citation_precision": 1.0,
+        "citation_recall": 1.0,
+        "unsupported_citation_count": 0,
+        "citation_validation_available": False,
+        "supported_claim_count": 0,
+        "unsupported_claim_count": 0,
+        "claim_support_rate": None,
+        "refusal_correct": True,
+    }
+
+    summary = summarize_results([partially_supported, refused, unanswerable])
+
+    assert summary["claim_support_rate"] == 0.375
+    assert summary["unsupported_claim_rate"] == 0.5
+    assert summary["claim_validation_coverage"] == 1.0
 
 
 def test_missed_retrieval_is_counted_in_mrr_denominator() -> None:

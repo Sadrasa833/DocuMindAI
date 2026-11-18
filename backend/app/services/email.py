@@ -22,13 +22,14 @@ class ConsoleEmailSender:
         self.settings = settings
 
     async def send(self, *, to: str, subject: str, text: str) -> None:
+        # Never log the body: account emails contain single-use tokens in URLs.
         logger.info(
-            "Development email message",
+            "Development email message (body withheld)",
             extra={
                 "email_to": to,
                 "email_subject": subject,
                 "email_from": self.settings.email_from,
-                "email_body": text,
+                "email_body_chars": len(text),
             },
         )
 

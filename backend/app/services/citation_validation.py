@@ -19,6 +19,10 @@ _SPACE_BEFORE_PUNCTUATION = re.compile(r"[ \t]+([.,;:!?])")
 _WORD = re.compile(r"[^\W_]+", re.UNICODE)
 _LEADING_CONJUNCTION = re.compile(r"^(?:and|but|or|و|اما|ولی)\s+", re.IGNORECASE)
 _SENTENCE_BOUNDARIES = frozenset(".!?۔؟\n;")
+_CLAUSE_SPLIT = re.compile(
+    r"(?<=[.!?۔؟;])\s+|\n+|,\s*|\s+(?:and|but|or|و|اما|ولی)\s+",
+    re.IGNORECASE,
+)
 _NEGATIONS = frozenset(
     {
         "not",
@@ -197,6 +201,8 @@ class CitationValidationResult:
 
     @property
     def should_refuse(self) -> bool:
+        if self.unsupported_claims:
+            return True
         return not self.citations and (self.had_citations or self.require_citations)
 
 
@@ -322,6 +328,30 @@ def _has_negation(text: str) -> bool:
     return any(token in _NEGATIONS for token in _WORD.findall(normalized))
 
 
+def _clauses(text: str) -> list[str]:
+    clauses = [clause.strip() for clause in _CLAUSE_SPLIT.split(text) if clause.strip()]
+    return clauses or ([text.strip()] if text.strip() else [])
+
+
+def _evidence_terms(content: str, *, claim_negated: bool) -> tuple[set[str], set[str]] | None:
+    positive: set[str] = set()
+    negative: set[str] = set()
+    for clause in _clauses(content):
+        terms = set(_content_terms(clause))
+        if _has_negation(clause):
+            negative.update(terms)
+        else:
+            positive.update(terms)
+
+    if claim_negated:
+        if not negative:
+            return None
+        return positive | negative, negative
+    if not positive:
+        return None
+    return positive, set()
+
+
 def _cosine(left: Sequence[float], right: Sequence[float]) -> float:
     dot = sum(a * b for a, b in zip(left, right, strict=False))
     left_norm = math.sqrt(sum(a * a for a in left))
@@ -386,10 +416,15 @@ def _candidate(
     hit: SearchHit,
     claim_vector: Sequence[float] | None,
 ) -> _Candidate | None:
-    if _has_negation(hit.chunk.content) != claim_negated:
+    evidence = _evidence_terms(hit.chunk.content, claim_negated=claim_negated)
+    if evidence is None:
         return None
 
-    source_terms = set(_content_terms(hit.chunk.content))
+    source_terms, negative_terms = evidence
+    claim_numbers = {term for term in claim_terms if term.isdigit()}
+    if claim_negated and claim_numbers and not claim_numbers <= negative_terms:
+        return None
+
     shared = claim_terms & source_terms
     semantic = None
     if claim_vector is not None:
@@ -478,9 +513,12 @@ async def validate_citations(
 
     Structural validation removes fabricated labels first. Each remaining
     citation group is checked against the sentence or clause it accompanies
-    using numeric, negation, and lexical evidence. When an embedding service is
-    supplied, semantic similarity is also considered. Unsupported citations are
-    removed; if no supported citation remains, the caller should refuse.
+    using numeric, negation, and lexical evidence. Negation is scoped to the
+    matching clause so an unrelated negated sentence does not invalidate a
+    supported claim. When an embedding service is supplied, semantic similarity
+    is also considered. Unsupported citations are removed, and any unsupported
+    cited claim makes the result refuse so a partially verified answer is never
+    returned as if it were fully supported.
     """
     had_citations = any(
         _CITATION_LABEL.search(match.group(1)) for match in _CITATION_GROUP.finditer(answer)

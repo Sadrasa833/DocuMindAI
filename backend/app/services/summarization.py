@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -14,19 +15,35 @@ from app.ai.prompts import (
     build_summary_reduce_prompt,
 )
 from app.core.config import Settings
-from app.core.exceptions import ConflictError, NotFoundError
+from app.core.exceptions import (
+    AIProviderError,
+    ConflictError,
+    NotFoundError,
+    ServiceUnavailableError,
+    SummarizationError,
+)
 from app.models.chunk import DocumentChunk
-from app.models.enums import DocumentStatus, SummaryStyle
+from app.models.document import Document
+from app.models.enums import DocumentStatus, SummaryStatus, SummaryStyle
 from app.repositories.chunks import ChunkRepository
 from app.repositories.documents import DocumentRepository
+from app.services.dispatch import TaskDispatcher
+
+logger = logging.getLogger(__name__)
+
+_QUEUE_UNAVAILABLE_MESSAGE = "The summary queue is unavailable. Please retry later."
 
 
 @dataclass(slots=True)
 class SummaryResult:
     document_id: uuid.UUID
-    style: SummaryStyle
-    summary: str
-    created_at: datetime
+    style: SummaryStyle | None
+    status: SummaryStatus
+    summary: str | None
+    error_message: str | None
+    started_at: datetime | None
+    created_at: datetime | None
+    updated_at: datetime
 
 
 @dataclass(slots=True)
@@ -87,12 +104,27 @@ class SummarizationService:
         *,
         settings: Settings,
         chat_provider: ChatProvider,
+        dispatcher: TaskDispatcher | None = None,
     ) -> None:
         self.session = session
         self.settings = settings
         self.chat_provider = chat_provider
+        self.dispatcher = dispatcher
         self.documents = DocumentRepository(session)
         self.chunks = ChunkRepository(session)
+
+    @staticmethod
+    def _to_result(document: Document) -> SummaryResult:
+        return SummaryResult(
+            document_id=document.id,
+            style=document.summary_style,
+            status=document.summary_status,
+            summary=document.summary,
+            error_message=document.summary_error,
+            started_at=document.summary_started_at,
+            created_at=document.summarized_at,
+            updated_at=document.updated_at,
+        )
 
     async def _map_reduce(self, chunks: list[DocumentChunk], style: SummaryStyle) -> str:
         groups = _group_chunks(chunks, self.settings.summary_map_chunk_chars)
@@ -135,39 +167,138 @@ class SummarizationService:
 
         return partials[0]
 
-    async def summarize(
+    async def get_state(self, *, user_id: uuid.UUID, document_id: uuid.UUID) -> SummaryResult:
+        document = await self.documents.get_owned(document_id, user_id)
+        if document is None:
+            raise NotFoundError("Document not found")
+        return self._to_result(document)
+
+    async def request_summary(
         self,
         *,
         user_id: uuid.UUID,
         document_id: uuid.UUID,
         style: SummaryStyle,
         force: bool = False,
-    ) -> SummaryResult:
+    ) -> tuple[SummaryResult, bool]:
+        """Queue asynchronous summarization and return the current state.
+
+        The boolean indicates whether a new Celery job was enqueued. Concurrent
+        or repeated requests while a job is active observe the existing job.
+        """
+        if self.dispatcher is None:
+            raise RuntimeError("A task dispatcher is required to request summaries")
+
         document = await self.documents.get_owned(document_id, user_id)
         if document is None:
             raise NotFoundError("Document not found")
         if document.status != DocumentStatus.COMPLETED:
             raise ConflictError("The document must finish processing before it can be summarized")
-        if document.summary and document.summary_style == style and not force:
-            return SummaryResult(
-                document_id=document.id,
+
+        cached = (
+            not force
+            and document.summary_status == SummaryStatus.COMPLETED
+            and document.summary is not None
+            and document.summary_style == style
+        )
+        if cached:
+            return self._to_result(document), False
+
+        attempt_id = uuid.uuid4()
+        marked = await self.documents.mark_summary_pending(
+            document_id,
+            user_id,
+            style=style,
+            force=force,
+            attempt_id=attempt_id,
+            stale_after_seconds=self.settings.summary_stuck_after_seconds,
+        )
+        await self.session.commit()
+        await self.session.refresh(document)
+        if not marked:
+            return self._to_result(document), False
+
+        try:
+            await self.dispatcher.enqueue_document_summarization(
+                document_id,
                 style=style,
-                summary=document.summary,
-                created_at=document.summarized_at or datetime.now(UTC),
+                attempt_id=attempt_id,
+                force=force,
+            )
+        except Exception:
+            logger.exception(
+                "Could not enqueue document summary",
+                extra={"document_id": str(document_id)},
+            )
+            await self.documents.mark_summary_failed(
+                document_id,
+                _QUEUE_UNAVAILABLE_MESSAGE,
+                attempt_id=attempt_id,
+                statuses=(SummaryStatus.PENDING,),
+            )
+            await self.session.commit()
+            await self.session.refresh(document)
+            raise ServiceUnavailableError(_QUEUE_UNAVAILABLE_MESSAGE) from None
+
+        return self._to_result(document), True
+
+    async def execute(
+        self,
+        *,
+        document_id: uuid.UUID,
+        style: SummaryStyle,
+        attempt_id: uuid.UUID,
+    ) -> bool:
+        """Run a claimed summary attempt inside a Celery worker."""
+        claimed = await self.documents.claim_summarization(document_id, attempt_id=attempt_id)
+        await self.session.commit()
+        if not claimed:
+            logger.info(
+                "Skipping summary job that is no longer claimed",
+                extra={"document_id": str(document_id), "attempt_id": str(attempt_id)},
+            )
+            return False
+
+        document = await self.session.get(Document, document_id)
+        if document is None:
+            return False
+
+        chunks = await self.chunks.list_for_document(document.id, document.user_id)
+        if not chunks:
+            raise SummarizationError(
+                "No extracted content is available for this document",
+                retryable=False,
+                attempt_id=attempt_id,
             )
 
-        chunks = await self.chunks.list_for_document(document.id, user_id)
-        if not chunks:
-            raise ConflictError("No extracted content is available for this document")
-        summary = await self._map_reduce(chunks, style)
-        now = datetime.now(UTC)
-        document.summary = summary
-        document.summary_style = style
-        document.summarized_at = now
-        await self.session.commit()
-        return SummaryResult(
-            document_id=document.id,
+        try:
+            summary = await self._map_reduce(chunks, style)
+        except AIProviderError as exc:
+            raise SummarizationError(
+                exc.message,
+                retryable=True,
+                attempt_id=attempt_id,
+            ) from exc
+
+        cleaned = summary.strip()
+        if not cleaned:
+            raise SummarizationError(
+                "The AI model returned an empty summary",
+                retryable=True,
+                attempt_id=attempt_id,
+            )
+
+        completed = await self.documents.complete_summarization(
+            document_id,
+            attempt_id=attempt_id,
             style=style,
-            summary=summary,
-            created_at=now,
+            summary=cleaned,
+            completed_at=datetime.now(UTC),
         )
+        await self.session.commit()
+        if not completed:
+            logger.warning(
+                "Discarding summary from a stale worker attempt",
+                extra={"document_id": str(document_id), "attempt_id": str(attempt_id)},
+            )
+        return completed

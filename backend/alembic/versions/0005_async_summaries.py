@@ -51,6 +51,10 @@ def upgrade() -> None:
         "documents",
         sa.Column("summary_attempt_id", sa.Uuid(), nullable=True),
     )
+    op.execute(
+        "UPDATE documents SET summary_status = 'completed' "
+        "WHERE summary IS NOT NULL"
+    )
 
 
 def downgrade() -> None:

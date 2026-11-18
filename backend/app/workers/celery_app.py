@@ -38,5 +38,9 @@ celery_app.conf.update(
             "task": "documind.cleanup_expired_tokens",
             "schedule": settings.token_cleanup_interval_seconds,
         },
+        "recover-stuck-summaries": {
+            "task": "documind.recover_stuck_summaries",
+            "schedule": settings.summary_recovery_interval_seconds,
+        },
     },
 )

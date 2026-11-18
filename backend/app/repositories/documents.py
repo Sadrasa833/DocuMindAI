@@ -2,13 +2,21 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import Select, and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.document import Document
-from app.models.enums import DocumentStatus
+from app.models.enums import DocumentStatus, SummaryStatus, SummaryStyle
+
+
+@dataclass(slots=True)
+class SummaryRecovery:
+    document_id: uuid.UUID
+    style: SummaryStyle
+    attempt_id: uuid.UUID
 
 
 class DocumentRepository:
@@ -270,3 +278,236 @@ class DocumentRepository:
             )
         )
         return bool(result.rowcount)
+
+    @staticmethod
+    def _summary_active(cutoff: datetime) -> object:
+        return or_(
+            and_(
+                Document.summary_status == SummaryStatus.PROCESSING,
+                or_(
+                    Document.summary_started_at.is_(None),
+                    Document.summary_started_at >= cutoff,
+                ),
+            ),
+            and_(
+                Document.summary_status == SummaryStatus.PENDING,
+                Document.updated_at >= cutoff,
+            ),
+        )
+
+    @staticmethod
+    def _summary_stale(cutoff: datetime) -> object:
+        return or_(
+            and_(
+                Document.summary_status == SummaryStatus.PROCESSING,
+                or_(
+                    Document.summary_started_at.is_(None),
+                    Document.summary_started_at < cutoff,
+                ),
+            ),
+            and_(
+                Document.summary_status == SummaryStatus.PENDING,
+                Document.updated_at < cutoff,
+            ),
+        )
+
+    async def mark_summary_pending(
+        self,
+        document_id: uuid.UUID,
+        user_id: uuid.UUID,
+        *,
+        style: SummaryStyle,
+        force: bool,
+        attempt_id: uuid.UUID,
+        stale_after_seconds: int,
+    ) -> bool:
+        """Atomically claim the right to enqueue a summary generation.
+
+        A fresh pending/processing job is never queued twice. A cached summary in
+        the requested style is also skipped unless ``force`` is set.
+        """
+        now = datetime.now(UTC)
+        cutoff = self._stale_cutoff(stale_after_seconds)
+        conditions = [
+            Document.id == document_id,
+            Document.user_id == user_id,
+            Document.status == DocumentStatus.COMPLETED,
+            ~self._summary_active(cutoff),
+        ]
+        if not force:
+            conditions.append(
+                ~and_(
+                    Document.summary_status == SummaryStatus.COMPLETED,
+                    Document.summary_style == style,
+                    Document.summary.is_not(None),
+                )
+            )
+        result = await self.session.execute(
+            update(Document)
+            .where(*conditions)
+            .values(
+                summary_status=SummaryStatus.PENDING,
+                summary_style=style,
+                summary_error=None,
+                summary_started_at=None,
+                summary_attempt_id=attempt_id,
+                updated_at=now,
+            )
+            .execution_options(synchronize_session=False)
+        )
+        return bool(result.rowcount)
+
+    async def claim_summarization(
+        self,
+        document_id: uuid.UUID,
+        *,
+        attempt_id: uuid.UUID,
+    ) -> bool:
+        now = datetime.now(UTC)
+        result = await self.session.execute(
+            update(Document)
+            .where(
+                Document.id == document_id,
+                Document.status == DocumentStatus.COMPLETED,
+                Document.summary_status == SummaryStatus.PENDING,
+                Document.summary_attempt_id == attempt_id,
+            )
+            .values(
+                summary_status=SummaryStatus.PROCESSING,
+                summary_started_at=now,
+                summary_error=None,
+                updated_at=now,
+            )
+            .execution_options(synchronize_session=False)
+        )
+        return bool(result.rowcount)
+
+    async def requeue_summarization(
+        self,
+        document_id: uuid.UUID,
+        *,
+        attempt_id: uuid.UUID,
+    ) -> bool:
+        result = await self.session.execute(
+            update(Document)
+            .where(
+                Document.id == document_id,
+                Document.summary_status == SummaryStatus.PROCESSING,
+                Document.summary_attempt_id == attempt_id,
+            )
+            .values(
+                summary_status=SummaryStatus.PENDING,
+                summary_started_at=None,
+                summary_error=None,
+                updated_at=datetime.now(UTC),
+            )
+            .execution_options(synchronize_session=False)
+        )
+        if result.rowcount:
+            return True
+        still_queued = await self.session.execute(
+            select(Document.id).where(
+                Document.id == document_id,
+                Document.summary_status == SummaryStatus.PENDING,
+                Document.summary_attempt_id == attempt_id,
+            )
+        )
+        return still_queued.scalar_one_or_none() is not None
+
+    async def mark_summary_failed(
+        self,
+        document_id: uuid.UUID,
+        error_message: str,
+        *,
+        attempt_id: uuid.UUID | None = None,
+        statuses: tuple[SummaryStatus, ...] = (
+            SummaryStatus.PENDING,
+            SummaryStatus.PROCESSING,
+        ),
+    ) -> bool:
+        conditions = [
+            Document.id == document_id,
+            Document.summary_status.in_(statuses),
+        ]
+        if attempt_id is not None:
+            conditions.append(Document.summary_attempt_id == attempt_id)
+        result = await self.session.execute(
+            update(Document)
+            .where(*conditions)
+            .values(
+                summary_status=SummaryStatus.FAILED,
+                summary_error=error_message[:500],
+                summary_started_at=None,
+                summary_attempt_id=None,
+                updated_at=datetime.now(UTC),
+            )
+            .execution_options(synchronize_session=False)
+        )
+        return bool(result.rowcount)
+
+    async def complete_summarization(
+        self,
+        document_id: uuid.UUID,
+        *,
+        attempt_id: uuid.UUID,
+        style: SummaryStyle,
+        summary: str,
+        completed_at: datetime,
+    ) -> bool:
+        """Persist a summary only if this worker still owns the active attempt."""
+        result = await self.session.execute(
+            update(Document)
+            .where(
+                Document.id == document_id,
+                Document.status == DocumentStatus.COMPLETED,
+                Document.summary_status == SummaryStatus.PROCESSING,
+                Document.summary_attempt_id == attempt_id,
+            )
+            .values(
+                summary=summary,
+                summary_style=style,
+                summary_status=SummaryStatus.COMPLETED,
+                summary_error=None,
+                summary_started_at=None,
+                summary_attempt_id=None,
+                summarized_at=completed_at,
+                updated_at=completed_at,
+            )
+            .execution_options(synchronize_session=False)
+        )
+        return bool(result.rowcount)
+
+    async def recover_stuck_summaries(self, *, stale_after_seconds: int) -> list[SummaryRecovery]:
+        """Requeue abandoned summary jobs with a new attempt identifier."""
+        cutoff = self._stale_cutoff(stale_after_seconds)
+        result = await self.session.execute(
+            select(Document.id, Document.summary_style).where(
+                Document.status == DocumentStatus.COMPLETED,
+                self._summary_stale(cutoff),
+            )
+        )
+        recovered: list[SummaryRecovery] = []
+        now = datetime.now(UTC)
+        for document_id, style in result.all():
+            attempt_id = uuid.uuid4()
+            update_result = await self.session.execute(
+                update(Document)
+                .where(Document.id == document_id, self._summary_stale(cutoff))
+                .values(
+                    summary_status=SummaryStatus.PENDING,
+                    summary_error=None,
+                    summary_started_at=None,
+                    summary_attempt_id=attempt_id,
+                    updated_at=now,
+                )
+                .execution_options(synchronize_session=False)
+            )
+            if update_result.rowcount:
+                recovered.append(
+                    SummaryRecovery(
+                        document_id=document_id,
+                        style=SummaryStyle(style) if style is not None else SummaryStyle.SHORT,
+                        attempt_id=attempt_id,
+                    )
+                )
+        return recovered

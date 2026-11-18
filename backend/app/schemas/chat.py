@@ -21,7 +21,15 @@ class ChatRequest(BaseModel):
         return normalized
 
 
+class CitationValidationSummary(BaseModel):
+    enabled: bool
+    supported_claims: int
+    unsupported_claims: int
+    refused: bool
+
+
 class ChatResponse(BaseModel):
     answer: str
     conversation_id: uuid.UUID
     citations: list[Citation]
+    citation_validation: CitationValidationSummary | None = None

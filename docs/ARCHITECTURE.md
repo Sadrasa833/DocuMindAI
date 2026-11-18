@@ -5,8 +5,8 @@
 DocuMind AI is split into four runtime components:
 
 1. **Next.js frontend** for authentication, document management, summaries, chat, and conversation history.
-2. **FastAPI backend** for API validation, authorization, orchestration, search, RAG, and summaries.
-3. **Celery worker** for CPU- and network-heavy PDF processing and embedding generation.
+2. **FastAPI backend** for API validation, authorization, orchestration, search, RAG, and streamed chat.
+3. **Celery worker and Beat** for PDF processing, embeddings, summary jobs, stale-job recovery, and auth-token cleanup.
 4. **PostgreSQL with pgvector and Redis** for durable state and asynchronous messaging.
 
 ```text
@@ -65,6 +65,7 @@ users
   1 ─── * documents
   1 ─── * conversations
   1 ─── * refresh_tokens
+  1 ─── * account_tokens
 
 documents
   1 ─── * document_chunks
@@ -86,9 +87,10 @@ Documents and conversations cascade from users. Chunks cascade from documents. M
 
 | Table | Purpose |
 |---|---|
-| `users` | Account identity, Argon2 password hash, active flag |
+| `users` | Account identity, Argon2 password hash, active flag, email-verification timestamp |
 | `refresh_tokens` | Hashed refresh tokens, expiry, revocation, user agent, IP |
-| `documents` | File metadata, processing state, counts, summary cache |
+| `account_tokens` | Hashed single-use email-verification and password-reset tokens |
+| `documents` | File metadata, processing state, counts, summary cache/status, active summary attempt |
 | `document_chunks` | Chunk text, page number, embedding vector |
 | `conversations` | Chat session title and timestamps |
 | `messages` | User/assistant messages and citation JSON |
@@ -121,6 +123,8 @@ On refresh:
 4. Otherwise revoke the used token and issue a new access/refresh pair.
 
 The reuse rule limits replay of a stolen rotated token. Password changes revoke all active refresh tokens and issue a fresh session.
+
+Email verification and password reset use single-use tokens stored only as SHA-256 hashes in `account_tokens`. The raw token is delivered by the configured console or SMTP email backend and is consumed atomically with a row lock. Verification is optional by default. Password reset requests return the same `202` response whether or not the address exists, and a successful reset revokes active refresh tokens. Password-confirmed account deletion removes the user row, cascade-owned data, and stored files, then revokes sessions. A periodic Celery Beat task deletes expired and used tokens after `TOKEN_CLEANUP_RETENTION_DAYS`.
 
 The browser client treats a 401 on a normal API call as an access-token expiry signal, calls `/auth/refresh`, and retries once. If refresh fails, it calls `/auth/logout` to clear stale cookies before redirecting to login. This prevents a redirect loop when both cookies are stale.
 
@@ -198,10 +202,19 @@ chat request
    -> otherwise call the chat model with untrusted delimited sources
    -> validate label existence, then numeric/negation/lexical claim support
    -> optionally verify claim/source similarity with batched embeddings
-   -> remove unsupported citations; refuse if no supported citation remains
+   -> remove unsupported citations; refuse the answer if any cited claim
+      is unsupported or if citations are required but none remain
    -> persist user and assistant messages plus verified citations
-   -> return answer, conversation_id, citations
+   -> return answer, conversation_id, citations, and validation counts
 ```
+
+Streaming uses the same validation path. `POST /chat/stream` emits `meta`,
+`delta`, `done`, and `error` SSE events. The `done` event always carries the
+final validated answer and citations, so a client replaces streamed text when
+validation rewrites or refuses it. Conversation persistence happens only after
+the final answer validates and uses a dedicated database session inside the
+streaming generator. Disconnects stop generation before additional events are
+sent.
 
 Prompt design:
 
@@ -210,25 +223,29 @@ Prompt design:
 - Every source has a stable label, document name, page, and content.
 - Citations map source labels to chunk IDs, document IDs, document names, and page numbers.
 - Fabricated or out-of-range labels are removed before claim validation.
-- Each cited claim is checked against its cited chunks with number, negation, and token-coverage checks; unrelated citations are removed.
+- Each cited claim is checked against its cited chunks with number, negation, and token-coverage checks. Negation is scoped to clauses so an unrelated negated sentence does not invalidate a supported claim, and negated claims require negated evidence.
 - When `RAG_CITATION_SEMANTIC_CHECK=true`, claim embeddings add a batched semantic-similarity check. This is off by default to avoid extra API calls.
 - Multiple sources can jointly support a multi-part claim, while citations that do not add evidence are dropped.
-- If no supported citation remains and citations are required, the deterministic insufficient-evidence response is returned.
+- Any unsupported cited claim makes the answer refuse. If citations are required but none remain, the deterministic insufficient-evidence response is also returned.
+- Historical conversation reads resolve each citation's document availability dynamically. Stored citation metadata remains intact after deletion, and the UI renders unavailable citations without a link.
+- Chat responses include aggregate supported/unsupported claim counts for evaluation and observability; streamed `done` events include the same metadata.
 - Conversation history is used to resolve references such as "it" or "that section"; history is not treated as evidence.
 - Model temperature is `0.0`.
 - Weak retrieval returns a fixed response without calling the model.
 
 ## Summaries
 
-Summarization is synchronous within the API request.
+Summarization runs as a Celery job rather than blocking the HTTP request.
 
-- A summary is cached by document and style.
-- `force=true` regenerates it.
-- Chunks are grouped under `SUMMARY_MAP_CHUNK_CHARS`.
-- A single group uses a direct summary prompt.
-- Multiple groups use map-reduce: summarize each group, then reduce partial summaries.
-- If no reduction batch can shrink a list, summaries are paired forcibly so the loop always makes progress.
-- The final summary is stored on the document with its style and timestamp.
+1. `POST /documents/{id}/summarize` validates ownership and the completed document state, creates a unique attempt ID, marks the summary `pending`, and enqueues the job. It returns `202` with the current state.
+2. If a completed summary already exists for the requested style and `force=false`, the endpoint returns `200` with the cached summary instead.
+3. A worker atomically claims the attempt, marks it `processing`, loads chunks, and generates the summary.
+4. The final summary is stored only if the worker still owns the active attempt, preventing a stale duplicate delivery from overwriting newer output.
+5. `GET /documents/{id}/summary` returns `pending`, `processing`, `completed`, or `failed` with the summary and error message. Both document list/detail and status responses expose summary state for polling.
+
+Chunks are grouped under `SUMMARY_MAP_CHUNK_CHARS`. A single group uses a direct summary prompt. Multiple groups use map-reduce: summarize each group, then reduce partial summaries. If no reduction batch can shrink a list, summaries are paired forcibly so the loop always makes progress.
+
+A Celery Beat task finds summary attempts stale beyond `SUMMARY_STUCK_AFTER_SECONDS` and re-enqueues them. Queue failures mark the attempt failed with a retry-later message. The dashboard polls the summary endpoint and stops polling when the attempt completes or fails.
 
 ## Frontend architecture
 
@@ -236,7 +253,11 @@ Summarization is synchronous within the API request.
 - Middleware only checks for cookie presence and redirects unauthenticated users away from protected routes. It does not decode JWTs.
 - The server proxy at `/app/api/proxy/[...path]/route.ts` forwards only the API prefix, cookies, selected headers, and response `Set-Cookie` headers.
 - The proxy rejects unsafe cross-origin browser mutations using `Origin` and `Sec-Fetch-Site`.
-- The client API wrapper centralizes error parsing, one-time refresh/retry, and login redirection.
+- The client API wrapper centralizes error parsing, one-time refresh/retry, login redirection, and SSE parsing.
+- Chat streaming uses `fetch` with a request body and reads the response as a `ReadableStream`, because `EventSource` cannot send POST bodies or custom headers. An `AbortController` cancels in-flight generation when the user starts another request. The streaming toggle is stored in local storage under `documind.chat.streaming`.
+- The `done` stream event replaces any optimistic or partially streamed content with the final validated answer and citations. Stream errors roll back the optimistic assistant message.
+- The document detail page polls `GET /documents/{id}/summary` until the summary job completes or fails. Poll generations are guarded so a stale poll cannot overwrite newer state.
+- Unavailable citations render as non-link cards with the original document name and page.
 - Uploads use XMLHttpRequest to expose progress while retaining cookie credentials.
 - No access or refresh token is stored in local storage or exposed to React state.
 
@@ -244,7 +265,11 @@ Summarization is synchronous within the API request.
 
 ### Async processing
 
-PDF parsing and embeddings can take seconds to minutes. Moving this work to Celery keeps API latency bounded and allows independent worker scaling.
+PDF parsing, embeddings, and summaries can take seconds to minutes. Moving this work to Celery keeps API latency bounded and allows independent worker scaling. Summary attempt IDs and conditional updates make duplicate or stale task delivery harmless. A single Beat scheduler handles stale document/summary recovery and auth-token cleanup.
+
+### Optional streamed chat
+
+Streaming improves perceived latency without changing the trust boundary: the same validation runs on the complete model response before anything is persisted, and the final `done` event carries the authoritative answer. Clients must still replace streamed text with that final value.
 
 ### Cookie authentication
 
@@ -267,8 +292,7 @@ PDF uploads are validated by extension, declared MIME type, `%PDF-` signature, a
 ## Extension points
 
 - Add workspace/organization-scoped storage quotas.
-- Move summaries to Celery jobs with progress polling.
-- Add SSE or WebSocket streaming for chat responses.
+- Add a formal NLI/entailment model for citation verification.
 - Add organization/workspace tenancy above user ownership.
 - Add a cross-encoder reranker before RAG prompt construction.
 - Add detailed usage accounting and plan-based quota tiers.

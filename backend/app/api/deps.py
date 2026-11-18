@@ -151,8 +151,14 @@ def get_summarization_service(
     session: DbSession,
     settings: SettingsDep,
     chat_provider: Annotated[ChatProvider, Depends(get_chat_provider)],
+    dispatcher: Annotated[TaskDispatcher, Depends(get_task_dispatcher)],
 ) -> SummarizationService:
-    return SummarizationService(session, settings=settings, chat_provider=chat_provider)
+    return SummarizationService(
+        session,
+        settings=settings,
+        chat_provider=chat_provider,
+        dispatcher=dispatcher,
+    )
 
 
 async def get_current_user(

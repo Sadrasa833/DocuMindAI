@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import logging
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence
 
 import openai
 from openai import AsyncOpenAI
@@ -132,3 +133,62 @@ class OpenAIChatProvider:
             logger.error("OpenAI chat request rejected: %s", type(exc).__name__)
             raise AIProviderError("The AI service could not process this request") from exc
         raise AIProviderError("The AI service did not return a response")
+
+    async def stream(
+        self,
+        *,
+        system_prompt: str,
+        user_prompt: str,
+        max_tokens: int,
+        temperature: float = 0.0,
+    ) -> AsyncIterator[str]:
+        emitted = False
+        last_error: Exception | None = None
+        for attempt in range(3):
+            response = None
+            try:
+                response = await self._get_client().chat.completions.create(
+                    model=self.settings.openai_chat_model,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    stream=True,
+                )
+                async for event in response:
+                    if not event.choices:
+                        continue
+                    delta = event.choices[0].delta.content
+                    if delta:
+                        emitted = True
+                        yield delta
+                if not emitted:
+                    raise AIProviderError("The AI model returned an empty response")
+                return
+            except AIProviderError:
+                raise
+            except _RETRYABLE_ERRORS as exc:
+                last_error = exc
+                if emitted:
+                    break
+                if attempt < 2:
+                    await asyncio.sleep(2**attempt)
+            except openai.OpenAIError as exc:
+                logger.error("OpenAI streaming request rejected: %s", type(exc).__name__)
+                raise AIProviderError("The AI service could not process this request") from exc
+            finally:
+                if response is not None:
+                    close = getattr(response, "close", None)
+                    if close is not None:
+                        try:
+                            await close()
+                        except Exception:
+                            logger.debug("Failed to close OpenAI stream", exc_info=True)
+        if last_error is not None:
+            logger.warning(
+                "OpenAI streaming request failed after retries: %s",
+                type(last_error).__name__,
+            )
+        raise AIProviderError("The AI service is temporarily unavailable") from last_error

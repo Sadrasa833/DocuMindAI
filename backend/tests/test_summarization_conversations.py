@@ -7,22 +7,38 @@ from httpx import AsyncClient
 from tests.fakes import register_user, upload_pdf
 
 
-async def test_summarize_document_caches_by_style(
-    client: AsyncClient, processed_document, chat_provider, monkeypatch
+async def test_summarize_document_queues_and_caches_by_style(
+    client: AsyncClient,
+    processed_document,
+    chat_provider,
+    dispatcher,
+    run_summarization,
 ) -> None:
     await register_user(client)
     document = await processed_document(client)
     chat_provider.response = "This agreement requires payment within thirty days."
 
-    short = await client.post(
+    queued = await client.post(
         f"/api/v1/documents/{document['id']}/summarize",
         json={"style": "short"},
     )
-    assert short.status_code == 200, short.text
-    body = short.json()
-    assert body["summary"] == chat_provider.response
-    assert body["style"] == "short"
-    assert body["document_id"] == document["id"]
+    assert queued.status_code == 202, queued.text
+    assert queued.json()["status"] == "pending"
+    assert queued.json()["summary"] is None
+    assert queued.json()["style"] == "short"
+    assert len(dispatcher.summary_jobs) == 1
+    job = dispatcher.summary_jobs[0]
+    assert job["document_id"] == uuid.UUID(document["id"])
+    assert chat_provider.calls == []
+
+    pending = await client.get(f"/api/v1/documents/{document['id']}/summary")
+    assert pending.status_code == 200
+    assert pending.json()["status"] == "pending"
+
+    assert await run_summarization(uuid.UUID(document["id"]), job["style"], job["attempt_id"])
+    completed = await client.get(f"/api/v1/documents/{document['id']}/summary")
+    assert completed.json()["status"] == "completed"
+    assert completed.json()["summary"] == chat_provider.response
     assert len(chat_provider.calls) == 1
     assert "untrusted" in chat_provider.calls[0]["system_prompt"].lower()
 
@@ -31,15 +47,21 @@ async def test_summarize_document_caches_by_style(
         json={"style": "short", "force": False},
     )
     assert cached.status_code == 200
-    assert cached.json()["summary"] == body["summary"]
+    assert cached.json()["summary"] == chat_provider.response
+    assert cached.json()["status"] == "completed"
     assert len(chat_provider.calls) == 1
+    assert len(dispatcher.summary_jobs) == 1
 
     detailed = await client.post(
         f"/api/v1/documents/{document['id']}/summarize",
         json={"style": "detailed"},
     )
-    assert detailed.status_code == 200
-    assert detailed.json()["style"] == "detailed"
+    assert detailed.status_code == 202
+    detailed_job = dispatcher.summary_jobs[-1]
+    assert detailed_job["style"] == "detailed"
+    await run_summarization(
+        uuid.UUID(document["id"]), detailed_job["style"], detailed_job["attempt_id"]
+    )
     assert len(chat_provider.calls) == 2
 
     chat_provider.response = "A regenerated summary."
@@ -47,13 +69,19 @@ async def test_summarize_document_caches_by_style(
         f"/api/v1/documents/{document['id']}/summarize",
         json={"style": "detailed", "force": True},
     )
-    assert forced.status_code == 200
-    assert forced.json()["summary"] == "A regenerated summary."
+    assert forced.status_code == 202
+    forced_job = dispatcher.summary_jobs[-1]
+    await run_summarization(
+        uuid.UUID(document["id"]), forced_job["style"], forced_job["attempt_id"]
+    )
+    result = await client.get(f"/api/v1/documents/{document['id']}/summary")
+    assert result.json()["summary"] == "A regenerated summary."
     assert len(chat_provider.calls) == 3
 
     detail = await client.get(f"/api/v1/documents/{document['id']}")
     assert detail.json()["summary"] == "A regenerated summary."
     assert detail.json()["summary_style"] == "detailed"
+    assert detail.json()["summary_status"] == "completed"
     assert detail.json()["summarized_at"] is not None
 
 
@@ -61,6 +89,8 @@ async def test_summarize_uses_map_reduce_for_long_documents(
     client: AsyncClient,
     processed_document,
     chat_provider,
+    dispatcher,
+    run_summarization,
     test_settings,
     monkeypatch,
 ) -> None:
@@ -74,14 +104,20 @@ async def test_summarize_uses_map_reduce_for_long_documents(
         f"/api/v1/documents/{document['id']}/summarize",
         json={"style": "short"},
     )
-    assert response.status_code == 200, response.text
-    assert response.json()["summary"] == "Merged factual summary."
+    assert response.status_code == 202, response.text
+    job = dispatcher.summary_jobs[-1]
+    await run_summarization(uuid.UUID(document["id"]), job["style"], job["attempt_id"])
+    result = await client.get(f"/api/v1/documents/{document['id']}/summary")
+    assert result.json()["status"] == "completed"
+    assert result.json()["summary"] == "Merged factual summary."
     assert len(chat_provider.calls) >= 3
     assert any("PAGE RANGE" in call["user_prompt"] for call in chat_provider.calls)
     assert any("PARTIAL SUMMARIES" in call["user_prompt"] for call in chat_provider.calls)
 
 
-async def test_summarize_requires_completed_owned_document(client_factory, chat_provider) -> None:
+async def test_summarize_requires_completed_owned_document(
+    client_factory, chat_provider, dispatcher
+) -> None:
     alice = await client_factory()
     bob = await client_factory()
     await register_user(alice, email="alice@example.com")
@@ -98,7 +134,9 @@ async def test_summarize_requires_completed_owned_document(client_factory, chat_
         f"/api/v1/documents/{pending['id']}/summarize", json={"style": "short"}
     )
     assert foreign.status_code == 404
+    assert (await bob.get(f"/api/v1/documents/{pending['id']}/summary")).status_code == 404
     assert chat_provider.calls == []
+    assert dispatcher.summary_jobs == []
 
 
 async def test_conversation_crud(client: AsyncClient) -> None:

@@ -13,6 +13,7 @@ class Citation(BaseModel):
     document_name: str
     page_number: int = Field(ge=1)
     chunk_id: uuid.UUID
+    available: bool = True
 
 
 class MessageResponse(BaseModel):

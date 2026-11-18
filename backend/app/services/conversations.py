@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import NotFoundError
 from app.models.conversation import Conversation
 from app.repositories.conversations import ConversationRepository
+from app.repositories.documents import DocumentRepository
 
 
 @dataclass(slots=True)
@@ -41,6 +42,16 @@ class ConversationService:
         if conversation is None:
             raise NotFoundError("Conversation not found")
         return conversation
+
+    async def available_document_ids(
+        self, user_id: uuid.UUID, document_ids: set[uuid.UUID]
+    ) -> set[uuid.UUID]:
+        if not document_ids:
+            return set()
+        documents = await DocumentRepository(self.session).get_many_owned(
+            sorted(document_ids), user_id
+        )
+        return {document.id for document in documents}
 
     async def delete(self, conversation_id: uuid.UUID, user_id: uuid.UUID) -> None:
         conversation = await self.conversations.get_owned(conversation_id, user_id)

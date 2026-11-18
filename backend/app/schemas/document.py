@@ -5,7 +5,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.enums import DocumentStatus, SummaryStyle
+from app.models.enums import DocumentStatus, SummaryStatus, SummaryStyle
 
 
 class DocumentResponse(BaseModel):
@@ -21,6 +21,8 @@ class DocumentResponse(BaseModel):
     error_message: str | None
     summary: str | None
     summary_style: SummaryStyle | None
+    summary_status: SummaryStatus
+    summary_error: str | None
     summarized_at: datetime | None
     processed_at: datetime | None
     created_at: datetime
@@ -33,6 +35,8 @@ class DocumentStatusResponse(BaseModel):
     id: uuid.UUID
     status: DocumentStatus
     error_message: str | None
+    summary_status: SummaryStatus
+    summary_error: str | None
     page_count: int | None
     chunk_count: int
     updated_at: datetime
@@ -57,6 +61,10 @@ class SummarizeRequest(BaseModel):
 
 class SummaryResponse(BaseModel):
     document_id: uuid.UUID
-    style: SummaryStyle
-    summary: str
-    created_at: datetime
+    style: SummaryStyle | None
+    status: SummaryStatus
+    summary: str | None
+    error_message: str | None
+    started_at: datetime | None
+    created_at: datetime | None
+    updated_at: datetime

@@ -158,6 +158,12 @@ def evaluate_question(
     answer = str(chat_payload.get("answer") or "")
     citations = list(chat_payload.get("citations") or [])
     expected_sources = _expected_sources(question)
+    validation_payload = chat_payload.get("citation_validation")
+    validation = validation_payload if isinstance(validation_payload, dict) else {}
+    supported_claims = int(validation.get("supported_claims") or 0)
+    unsupported_claims = int(validation.get("unsupported_claims") or 0)
+    validated_claims = supported_claims + unsupported_claims
+    claim_support_rate = supported_claims / validated_claims if validated_claims else None
 
     rank = _matching_rank(search_results, expected_sources, top_k) if expected_sources else None
 
@@ -192,6 +198,10 @@ def evaluate_question(
         "citation_precision": citation_precision,
         "citation_recall": citation_recall,
         "unsupported_citation_count": unsupported_citations,
+        "citation_validation_available": bool(validation),
+        "supported_claim_count": supported_claims,
+        "unsupported_claim_count": unsupported_claims,
+        "claim_support_rate": claim_support_rate,
         "refused": refused,
         "refusal_success": refusal_success,
         "refusal_correct": (refused and not citations) if should_refuse else not refused,
@@ -204,6 +214,14 @@ def summarize_results(results: list[dict[str, Any]]) -> dict[str, float | int]:
     ranks = [result["retrieval_rank"] for result in answerable]
     citations = sum(result["citation_count"] for result in results)
     unsupported_citations = sum(result["unsupported_citation_count"] for result in results)
+    supported_claims = sum(int(result.get("supported_claim_count") or 0) for result in results)
+    unsupported_claims = sum(int(result.get("unsupported_claim_count") or 0) for result in results)
+    validated_claims = supported_claims + unsupported_claims
+    claim_support_rates = [
+        result.get("claim_support_rate")
+        for result in answerable
+        if result.get("claim_support_rate") is not None
+    ]
     return {
         "questions": len(results),
         "answerable_questions": len(answerable),
@@ -228,6 +246,15 @@ def summarize_results(results: list[dict[str, Any]]) -> dict[str, float | int]:
         "citation_validity_rate": mean(
             1.0 if result["citation_valid"] else 0.0 for result in results
         ),
+        "claim_support_rate": mean(claim_support_rates) if claim_support_rates else 1.0,
+        "unsupported_claim_rate": (
+            unsupported_claims / validated_claims if validated_claims else 0.0
+        ),
+        "claim_validation_coverage": mean(
+            1.0 if result.get("citation_validation_available") else 0.0 for result in answerable
+        )
+        if answerable
+        else 0.0,
         "unanswerable_refusal_rate": mean(
             1.0 if result["refusal_success"] else 0.0 for result in unanswerable
         )
@@ -499,15 +526,18 @@ def print_report(dataset: dict[str, Any], results: list[dict[str, Any]], top_k: 
     print()
     print(
         f"{'id':<28} {'hit':<4} {'rank':<5} {'keywords':<9} {'cite P/R':<10} "
-        f"{'unsupported':<11} {'refused'}"
+        f"{'claims':<7} {'unsupported':<11} {'refused'}"
     )
     for result in results:
+        claim_support = result.get("claim_support_rate")
+        claim_label = f"{claim_support:.0%}" if claim_support is not None else "-"
         print(
             f"{result['id']:<28} "
             f"{'yes' if result['retrieval_hit'] else 'no':<4} "
             f"{result['retrieval_rank'] or '-':<5} "
             f"{result['keyword_recall']:.0%}     "
             f"{result['citation_precision']:.0%}/{result['citation_recall']:.0%}    "
+            f"{claim_label:<7} "
             f"{result['unsupported_citation_count']:<11} "
             f"{result['refused']}"
         )
@@ -520,6 +550,9 @@ def print_report(dataset: dict[str, Any], results: list[dict[str, Any]], top_k: 
     print(f"Citation recall:           {summary['citation_recall']:.1%}")
     print(f"Unsupported citation rate: {summary['unsupported_citation_rate']:.1%}")
     print(f"Citation structural valid: {summary['citation_validity_rate']:.1%}")
+    print(f"Claim validation coverage: {summary['claim_validation_coverage']:.1%}")
+    print(f"Claim support rate:        {summary['claim_support_rate']:.1%}")
+    print(f"Unsupported claim rate:    {summary['unsupported_claim_rate']:.1%}")
     print(f"Unanswerable refusal:      {summary['unanswerable_refusal_rate']:.1%}")
     print(f"Refusal accuracy:          {summary['refusal_accuracy']:.1%}")
 
@@ -544,6 +577,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--min-mrr", type=float, default=0.5)
     parser.add_argument("--min-citation-validity", type=float, default=1.0)
     parser.add_argument("--min-citation-precision", type=float, default=0.9)
+    parser.add_argument("--min-claim-support", type=float, default=0.9)
     parser.add_argument("--min-refusal-accuracy", type=float, default=0.9)
     parser.add_argument(
         "--retrieval-only",
@@ -630,6 +664,11 @@ def main(argv: list[str] | None = None) -> int:
             failures.append(
                 f"citation precision {summary['citation_precision']:.1%} < "
                 f"{args.min_citation_precision:.1%}"
+            )
+        if summary["claim_support_rate"] < args.min_claim_support:
+            failures.append(
+                f"claim support rate {summary['claim_support_rate']:.1%} < "
+                f"{args.min_claim_support:.1%}"
             )
         if summary["refusal_accuracy"] < args.min_refusal_accuracy:
             failures.append(

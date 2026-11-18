@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
@@ -16,7 +16,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { api, getErrorMessage } from "@/lib/api";
-import type { DocumentItem, SummaryStyle } from "@/lib/types";
+import type { DocumentItem, SummaryResponse, SummaryStyle } from "@/lib/types";
 import { formatDate, formatFileSize, isProcessingStatus } from "@/lib/utils";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
@@ -34,10 +34,17 @@ export default function DocumentDetailPage() {
   const [summarizing, setSummarizing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [citationPage, setCitationPage] = useState<number | null>(null);
+  const summaryPollToken = useRef(0);
 
   useEffect(() => {
     const page = Number(new URLSearchParams(window.location.search).get("page"));
     if (Number.isFinite(page) && page > 0) setCitationPage(page);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      summaryPollToken.current += 1;
+    };
   }, []);
 
   const applyDocument = useCallback((next: DocumentItem) => {
@@ -91,27 +98,52 @@ export default function DocumentDetailPage() {
     };
   }, [applyDocument, documentId]);
 
+  function applySummary(result: SummaryResponse) {
+    setDocument((current) =>
+      current
+        ? {
+            ...current,
+            summary: result.status === "completed" ? result.summary : current.summary,
+            summary_style: result.style ?? current.summary_style,
+            summary_status: result.status,
+            summary_error: result.error_message,
+            summarized_at: result.created_at ?? current.summarized_at,
+          }
+        : current,
+    );
+  }
+
   async function generateSummary() {
     if (!document) return;
+    const token = ++summaryPollToken.current;
     setSummarizing(true);
     setActionError(null);
     try {
       const force = document.summary_style === style && Boolean(document.summary);
       const result = await api.documents.summarize(document.id, style, force);
-      setDocument((current) =>
-        current
-          ? {
-              ...current,
-              summary: result.summary,
-              summary_style: result.style,
-              summarized_at: result.created_at,
-            }
-          : current,
-      );
+      if (token !== summaryPollToken.current) return;
+      applySummary(result);
+      if (result.status === "completed") return;
+      if (result.status === "failed") {
+        throw new Error(result.error_message ?? "Summary generation failed.");
+      }
+
+      for (let attempt = 0; attempt < 60; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        if (token !== summaryPollToken.current) return;
+        const state = await api.documents.summary(document.id);
+        if (token !== summaryPollToken.current) return;
+        applySummary(state);
+        if (state.status === "completed") return;
+        if (state.status === "failed") {
+          throw new Error(state.error_message ?? "Summary generation failed.");
+        }
+      }
+      throw new Error("Summary generation is still running. Refresh to check again.");
     } catch (err) {
-      setActionError(getErrorMessage(err));
+      if (token === summaryPollToken.current) setActionError(getErrorMessage(err));
     } finally {
-      setSummarizing(false);
+      if (token === summaryPollToken.current) setSummarizing(false);
     }
   }
 
@@ -169,6 +201,10 @@ export default function DocumentDetailPage() {
 
   if (!document) return null;
   const processing = isProcessingStatus(document.status);
+  const summaryBusy =
+    summarizing ||
+    document.summary_status === "pending" ||
+    document.summary_status === "processing";
   const hasMatchingSummary = document.summary_style === style && Boolean(document.summary);
 
   return (
@@ -286,43 +322,61 @@ export default function DocumentDetailPage() {
                     type="button"
                     className="btn-secondary !py-2"
                     onClick={() => void generateSummary()}
-                    disabled={summarizing || processing}
+                    disabled={summaryBusy || processing}
                   >
-                    {summarizing ? (
+                    {summaryBusy ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
                       <RefreshCw className="h-4 w-4" />
                     )}
-                    Regenerate
+                    {summaryBusy ? "Regenerating" : "Regenerate"}
                   </button>
                 </div>
               </>
             ) : (
               <div className="flex flex-col items-center py-10 text-center">
                 <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-50 text-brand-600">
-                  <Sparkles className="h-5 w-5" />
+                  {summaryBusy ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-5 w-5" />
+                  )}
                 </span>
                 <p className="mt-4 text-sm font-semibold text-slate-900">
-                  {processing ? "Summary will be available shortly" : "No summary yet"}
+                  {processing
+                    ? "Summary will be available shortly"
+                    : summaryBusy
+                      ? "Generating summary"
+                      : document.summary_status === "failed"
+                        ? "Summary generation failed"
+                        : "No summary yet"}
                 </p>
                 <p className="mt-1 max-w-sm text-sm leading-6 text-slate-500">
                   {processing
                     ? "We are still extracting and indexing this document. You can generate a summary once processing completes."
-                    : `Create a ${style} summary grounded entirely in this PDF.`}
+                    : summaryBusy
+                      ? "The summary is being generated in the background. This page will update automatically."
+                      : document.summary_status === "failed"
+                        ? (document.summary_error ??
+                          "The summary could not be generated. Try again.")
+                        : `Create a ${style} summary grounded entirely in this PDF.`}
                 </p>
                 <button
                   type="button"
                   className="btn-primary mt-5"
-                  disabled={summarizing || processing}
+                  disabled={summaryBusy || processing}
                   onClick={() => void generateSummary()}
                 >
-                  {summarizing ? (
+                  {summaryBusy ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" /> Generating summary
                     </>
                   ) : (
                     <>
-                      <Sparkles className="h-4 w-4" /> Generate {style} summary
+                      <Sparkles className="h-4 w-4" />{" "}
+                      {document.summary_status === "failed"
+                        ? "Try again"
+                        : `Generate ${style} summary`}
                     </>
                   )}
                 </button>

@@ -2,6 +2,7 @@ import type {
   ApiErrorBody,
   AuthResponse,
   ChatResponse,
+  ChatStreamEvent,
   ConversationDetail,
   ConversationSummary,
   DocumentItem,
@@ -219,6 +220,115 @@ async function uploadDocument(
   return send(true);
 }
 
+function parseStreamEvent(block: string): ChatStreamEvent | null {
+  const data = block
+    .split("\n")
+    .filter((line) => line.startsWith("data:"))
+    .map((line) => line.slice(5).trimStart())
+    .join("\n");
+  if (!data) return null;
+  try {
+    return JSON.parse(data) as ChatStreamEvent;
+  } catch {
+    throw new ApiError("The server returned a malformed stream event.", {
+      status: 0,
+      code: "invalid_stream",
+    });
+  }
+}
+
+async function readStreamEvents(
+  response: Response,
+  onEvent: (event: ChatStreamEvent) => void,
+): Promise<boolean> {
+  if (!response.body) {
+    throw new ApiError("The server did not return a readable response stream.", {
+      status: 0,
+      code: "invalid_stream",
+    });
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let completed = false;
+
+  const handleBlock = (block: string): void => {
+    const event = parseStreamEvent(block);
+    if (!event) return;
+    if (event.type === "error") {
+      throw new ApiError(event.message, { status: 200, code: "stream_error" });
+    }
+    if (event.type === "done") completed = true;
+    onEvent(event);
+  };
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer = (buffer + decoder.decode(value, { stream: true })).replace(/\r\n/g, "\n");
+      let boundary = buffer.indexOf("\n\n");
+      while (boundary >= 0) {
+        const block = buffer.slice(0, boundary);
+        buffer = buffer.slice(boundary + 2);
+        handleBlock(block);
+        boundary = buffer.indexOf("\n\n");
+      }
+    }
+    buffer = (buffer + decoder.decode()).replace(/\r\n/g, "\n");
+    if (buffer.trim()) handleBlock(buffer);
+  } finally {
+    reader.releaseLock();
+  }
+  return completed;
+}
+
+async function streamChat(
+  question: string,
+  documentIds: string[],
+  conversationId: string | null,
+  onEvent: (event: ChatStreamEvent) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const send = (): Promise<Response> =>
+    fetch(`${API_BASE}/chat/stream`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        question,
+        document_ids: documentIds,
+        conversation_id: conversationId,
+      }),
+      credentials: "same-origin",
+      cache: "no-store",
+      signal,
+    });
+
+  let response = await send();
+  if (response.status === 401) {
+    const refreshed = await refreshSession();
+    if (!refreshed) {
+      redirectToLogin();
+      throw new ApiError("Your session has expired. Please sign in again.", {
+        status: 401,
+        code: "unauthorized",
+      });
+    }
+    response = await send();
+  }
+  if (!response.ok) {
+    throw await parseResponseError(response);
+  }
+
+  const completed = await readStreamEvents(response, onEvent);
+  if (!completed) {
+    throw new ApiError("The response stream ended unexpectedly. Please try again.", {
+      status: 0,
+      code: "stream_incomplete",
+    });
+  }
+}
+
 export interface DocumentListParams {
   page?: number;
   pageSize?: number;
@@ -280,6 +390,7 @@ export const api = {
     stats: () => request<DocumentStats>("/documents/stats"),
     status: (id: string) => request<DocumentStatusResponse>(`/documents/${id}/status`),
     delete: (id: string) => request<void>(`/documents/${id}`, { method: "DELETE" }),
+    summary: (id: string) => request<SummaryResponse>(`/documents/${id}/summary`),
     summarize: (id: string, style: SummaryStyle, force = false) =>
       request<SummaryResponse>(`/documents/${id}/summarize`, {
         method: "POST",
@@ -305,6 +416,13 @@ export const api = {
         conversation_id: conversationId,
       }),
     }),
+  chatStream: (
+    question: string,
+    documentIds: string[],
+    conversationId: string | null,
+    onEvent: (event: ChatStreamEvent) => void,
+    signal?: AbortSignal,
+  ) => streamChat(question, documentIds, conversationId, onEvent, signal),
   conversations: {
     list: (page = 1, pageSize = 50) =>
       request<Page<ConversationSummary>>(

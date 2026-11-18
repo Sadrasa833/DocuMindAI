@@ -115,6 +115,58 @@ async def test_multiple_sources_can_support_one_claim() -> None:
     assert [citation["page_number"] for citation in result.citations] == [1, 2]
 
 
+async def test_unrelated_negation_does_not_reject_a_supported_claim() -> None:
+    hit = _hit(
+        "The agreement does not renew automatically. "
+        "Payment terms are net thirty days from the invoice date."
+    )
+
+    result = await validate_citations("Payment is due in 30 days [S1].", [hit])
+
+    assert not result.should_refuse
+    assert result.answer == "Payment is due in 30 days [S1]."
+    assert result.citations
+
+
+async def test_negated_claim_requires_negated_evidence() -> None:
+    positive = _hit("Payment is due in 30 days.")
+    refused = await validate_citations("Payment is not due in 30 days [S1].", [positive])
+    assert refused.should_refuse
+    assert refused.citations == []
+
+    negative = _hit("Payment is not due in 30 days.")
+    supported = await validate_citations("Payment is not due in 30 days [S1].", [negative])
+    assert not supported.should_refuse
+    assert supported.citations
+
+
+async def test_negated_number_must_appear_in_a_negated_clause() -> None:
+    hit = _hit("Payment is due in 30 days, not 60 days.")
+
+    result = await validate_citations("Payment is not due in 30 days [S1].", [hit])
+
+    assert result.should_refuse
+    assert result.citations == []
+
+
+async def test_one_unsupported_claim_refuses_the_whole_answer() -> None:
+    hits = [
+        _hit("Payment terms are net thirty days from the invoice date.", page_number=1),
+        _hit("The agreement renews automatically for one year.", page_number=2),
+    ]
+
+    result = await validate_citations(
+        "Payment is due in 30 days [S1]. The governing law is Delaware [S2].",
+        hits,
+    )
+
+    assert result.should_refuse
+    assert result.supported_claims == 1
+    assert result.unsupported_claims == 1
+    assert result.answer == "Payment is due in 30 days [S1]. The governing law is Delaware."
+    assert [citation["page_number"] for citation in result.citations] == [1]
+
+
 async def test_unsupported_claims_refuse_and_do_not_return_citations() -> None:
     result = await validate_citations(
         "The governing law is Delaware [S1].",

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence
 from typing import Protocol
 
 
@@ -17,3 +17,12 @@ class ChatProvider(Protocol):
         max_tokens: int,
         temperature: float = 0.0,
     ) -> str: ...
+
+    def stream(
+        self,
+        *,
+        system_prompt: str,
+        user_prompt: str,
+        max_tokens: int,
+        temperature: float = 0.0,
+    ) -> AsyncIterator[str]: ...

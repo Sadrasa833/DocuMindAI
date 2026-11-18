@@ -182,9 +182,7 @@ async def resend_verification(
     accounts: Annotated[AccountService, Depends(get_account_service)],
 ) -> AccountActionResponse:
     await accounts.send_verification(current_user)
-    return AccountActionResponse(
-        message="If verification is needed, a new message has been sent."
-    )
+    return AccountActionResponse(message="If verification is needed, a new message has been sent.")
 
 
 @router.post(

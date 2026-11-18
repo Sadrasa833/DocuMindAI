@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import io
 import re
 import textwrap
 import uuid
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence
 from typing import Any
 
 import pypdfium2 as pdfium
@@ -39,9 +40,30 @@ class FakeEmailSender:
 class FakeTaskDispatcher:
     def __init__(self) -> None:
         self.enqueued: list[uuid.UUID] = []
+        self.summary_jobs: list[dict[str, Any]] = []
+        self.fail_summary_dispatch = False
 
     async def enqueue_document_processing(self, document_id: uuid.UUID) -> None:
         self.enqueued.append(document_id)
+
+    async def enqueue_document_summarization(
+        self,
+        document_id: uuid.UUID,
+        *,
+        style: object,
+        attempt_id: uuid.UUID,
+        force: bool = False,
+    ) -> None:
+        if self.fail_summary_dispatch:
+            raise RuntimeError("broker unavailable")
+        self.summary_jobs.append(
+            {
+                "document_id": document_id,
+                "style": getattr(style, "value", style),
+                "attempt_id": attempt_id,
+                "force": force,
+            }
+        )
 
 
 class FakeEmbeddingProvider:
@@ -74,6 +96,27 @@ class FakeChatProvider:
     def __init__(self) -> None:
         self.response = "The documents state that payment is due within 30 days [S1]."
         self.calls: list[dict[str, Any]] = []
+        self.error: Exception | None = None
+        self.stream_chunks: list[str] | None = None
+        self.stream_delay = 0.0
+        self.fail_stream_after: int | None = None
+
+    def _record_call(
+        self,
+        *,
+        system_prompt: str,
+        user_prompt: str,
+        max_tokens: int,
+        temperature: float,
+    ) -> None:
+        self.calls.append(
+            {
+                "system_prompt": system_prompt,
+                "user_prompt": user_prompt,
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+            }
+        )
 
     async def generate(
         self,
@@ -83,15 +126,42 @@ class FakeChatProvider:
         max_tokens: int,
         temperature: float = 0.0,
     ) -> str:
-        self.calls.append(
-            {
-                "system_prompt": system_prompt,
-                "user_prompt": user_prompt,
-                "max_tokens": max_tokens,
-                "temperature": temperature,
-            }
+        self._record_call(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            max_tokens=max_tokens,
+            temperature=temperature,
         )
+        if self.error is not None:
+            raise self.error
         return self.response
+
+    async def stream(
+        self,
+        *,
+        system_prompt: str,
+        user_prompt: str,
+        max_tokens: int,
+        temperature: float = 0.0,
+    ) -> AsyncIterator[str]:
+        self._record_call(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+        if self.error is not None and self.fail_stream_after is None:
+            raise self.error
+        chunks = [self.response] if self.stream_chunks is None else self.stream_chunks
+        for index, chunk in enumerate(chunks):
+            if self.fail_stream_after is not None and index >= self.fail_stream_after:
+                raise self.error or RuntimeError("stream failed")
+            if chunk:
+                yield chunk
+            if self.stream_delay:
+                await asyncio.sleep(self.stream_delay)
+        if self.fail_stream_after is not None and self.fail_stream_after <= len(chunks):
+            raise self.error or RuntimeError("stream failed")
 
 
 def make_embedding_service(provider: FakeEmbeddingProvider) -> EmbeddingService:

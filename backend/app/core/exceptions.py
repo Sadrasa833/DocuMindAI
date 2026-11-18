@@ -90,6 +90,22 @@ class AIProviderError(Exception):
         self.message = message
 
 
+class SummarizationError(Exception):
+    """An expected failure while generating a document summary."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        retryable: bool = False,
+        attempt_id: uuid.UUID | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.message = message
+        self.retryable = retryable
+        self.attempt_id = attempt_id
+
+
 class DocumentProcessingError(Exception):
     """An expected failure while processing a document."""
 
